@@ -2,12 +2,27 @@
 import json, sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
 
-import pandas as pd
-import streamlit as st
+import importlib  # noqa: E402
 
-import ui
+# Streamlit re-runs app.py when it changes but keeps helper modules cached. After a multi-file update that leaves
+# a stale mix (e.g. "cannot import name ... from 'agent'"), so reload every local module whose file changed.
+_LOCAL_MODULES = ["metrics", "knowledge", "store", "rasterops", "hydro", "session", "agent_tools", "agent", "ui"]  # dependency order
+for _name in _LOCAL_MODULES:
+    _mod = sys.modules.get(_name)
+    if _mod is not None and getattr(_mod, "__file__", None):
+        try:
+            if getattr(_mod, "_file_mtime", None) != Path(_mod.__file__).stat().st_mtime:
+                importlib.reload(_mod)
+        except Exception:
+            pass
+
+import pandas as pd  # noqa: E402
+import streamlit as st  # noqa: E402
+
+import ui  # noqa: E402
 
 st.set_page_config(page_title="LULC-MOLUSCE-SWAT+ Agent", page_icon=ui.page_icon(), layout="wide")
 ui.apply_theme()
@@ -16,7 +31,11 @@ try:
     import hydro, knowledge
     from agent import DEFAULT_MODEL, friendly_error, offline_analysis, run_agent
     from session import Session
-    __version__ = "0.4.1"
+    __version__ = "0.4.2"
+    for _name in _LOCAL_MODULES:
+        _mod = sys.modules.get(_name)
+        if _mod is not None and getattr(_mod, "__file__", None):
+            _mod._file_mtime = Path(_mod.__file__).stat().st_mtime
 except ImportError as e:  # most common deployment mistake: folders flattened or missing dependencies
     st.error(f"Cannot import the analysis core: {e}")
     st.markdown("Check that all .py files from the flat package (metrics, knowledge, store, rasterops, hydro, session, agent_tools, agent) are in the same folder as app.py and that "

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lulc-molusce-swat-agent"
-version = "0.4.1"
+version = "0.4.2"
 description = "AI-assisted research tools for LULC change detection, MOLUSCE validation and SWAT+ evaluation (Streamlit app)"
 readme = "README.md"
 requires-python = ">=3.10"

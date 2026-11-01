@@ -1,4 +1,7 @@
 # Changelog
+## 0.4.2
+- Fix: after a multi-file update Streamlit Cloud kept old helper modules cached ("cannot import name 'friendly_error' from 'agent'").
+  `app.py` now reloads any local module whose file changed, so updates apply without a manual reboot.
 ## 0.4.1
 - Fix: the page could freeze the browser tab (and drop the connection, showing "Oh no. Error running app"). The always-on floating
   logo animation forced constant redraws of the filtered SVG, halving the frame rate. The logo now moves only on hover, uses a
