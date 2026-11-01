@@ -16,7 +16,7 @@ try:
     import hydro, knowledge
     from agent import DEFAULT_MODEL, run_agent
     from session import Session
-    __version__ = "0.3.0"
+    __version__ = "0.4.0"
 except ImportError as e:  # most common deployment mistake: folders flattened or missing dependencies
     st.error(f"Cannot import the analysis core: {e}")
     st.markdown("Check that all .py files from the flat package (metrics, knowledge, store, rasterops, hydro, session, agent_tools, agent) are in the same folder as app.py and that "

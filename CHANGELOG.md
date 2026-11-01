@@ -1,4 +1,9 @@
 # Changelog
+## 0.4.0
+- Logo: added a small AI-agent robot head and a 3D look (extruded hexagon badge, glossy face, shaded globe, drop shadows).
+- 3D interface: tilted hero slab with a perspective grid and floating logo, extruded push-down buttons, raised tab pills in a recessed tray,
+  glossy metric tiles with coloured edges that tilt on hover, 3D section icons and workflow chips, lifted data panels.
+  Motion is disabled for users who prefer reduced motion.
 ## 0.3.0
 - New AI-agent logo (`logo.svg`, `logo.png`) used as page icon, header, sidebar brand and agent chat avatar.
 - Redesigned Streamlit frontend (`ui.py`): vibrant violet-pink-orange-teal palette, gradient hero, pill tabs, colour-coded metric cards,

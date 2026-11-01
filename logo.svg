@@ -6,52 +6,132 @@
       <stop offset="0.7" stop-color="#F97316"/>
       <stop offset="1" stop-color="#FACC15"/>
     </linearGradient>
+    <linearGradient id="side" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3B0764"/>
+      <stop offset="0.5" stop-color="#9D174D"/>
+      <stop offset="1" stop-color="#9A3412"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.32"/>
+      <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0.06"/>
+      <stop offset="0.46" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
     <linearGradient id="globe" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#22D3EE"/>
       <stop offset="0.55" stop-color="#10B981"/>
       <stop offset="1" stop-color="#065F46"/>
     </linearGradient>
+    <radialGradient id="sphere" cx="0.32" cy="0.28" r="0.85">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="0.35" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="0.75" stop-color="#000000" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.45"/>
+    </radialGradient>
     <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
       <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.9"/>
       <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
     </radialGradient>
+    <linearGradient id="head" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E0E7FF"/>
+    </linearGradient>
+    <linearGradient id="visor" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4C1D95"/>
+      <stop offset="1" stop-color="#1E1B4B"/>
+    </linearGradient>
+    <filter id="drop" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#1E1B4B" flood-opacity="0.45"/>
+    </filter>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+    <clipPath id="hexclip">
+      <path id="hexpath" d="M256 20 L460 138 Q476 147 476 166 L476 346 Q476 365 460 374 L256 492 Q240 501 224 492 L52 374 Q36 365 36 346 L36 166 Q36 147 52 138 L224 20 Q240 11 256 20 Z" transform="translate(16 -8) scale(0.97 0.97)"/>
+    </clipPath>
   </defs>
-  <!-- rounded hexagon badge -->
-  <path d="M256 20 L460 138 Q476 147 476 166 L476 346 Q476 365 460 374 L256 492 Q240 501 224 492 L52 374 Q36 365 36 346 L36 166 Q36 147 52 138 L224 20 Q240 11 256 20 Z" transform="translate(16 0) scale(0.97 1)" fill="url(#bg)"/>
+
+  <!-- 3D hexagon badge: extruded side, face, gloss -->
+  <g transform="translate(16 -8) scale(0.97 0.97)">
+    <path d="M256 20 L460 138 Q476 147 476 166 L476 346 Q476 365 460 374 L256 492 Q240 501 224 492 L52 374 Q36 365 36 346 L36 166 Q36 147 52 138 L224 20 Q240 11 256 20 Z" transform="translate(0 22)" fill="url(#side)"/>
+    <path d="M256 20 L460 138 Q476 147 476 166 L476 346 Q476 365 460 374 L256 492 Q240 501 224 492 L52 374 Q36 365 36 346 L36 166 Q36 147 52 138 L224 20 Q240 11 256 20 Z" fill="url(#bg)"/>
+  </g>
+  <rect x="0" y="0" width="512" height="512" fill="url(#gloss)" clip-path="url(#hexclip)"/>
+
+  <!-- globe shadow -->
+  <ellipse cx="262" cy="408" rx="110" ry="18" fill="#1E1B4B" opacity="0.35" filter="url(#soft)"/>
+
   <!-- globe made of land-cover patches -->
-  <circle cx="256" cy="268" r="128" fill="url(#globe)"/>
-  <clipPath id="g"><circle cx="256" cy="268" r="128"/></clipPath>
-  <g clip-path="url(#g)" opacity="0.95">
-    <path d="M128 230 Q190 200 230 236 T330 250 L384 236 L384 300 Q320 330 270 300 T128 312 Z" fill="#84CC16"/>
-    <path d="M150 330 Q220 300 260 330 T384 340 L384 400 L128 400 Z" fill="#FACC15" opacity="0.9"/>
-    <path d="M220 140 L300 140 L320 200 Q280 220 240 200 Z" fill="#3B82F6" opacity="0.85"/>
-    <rect x="276" y="268" width="34" height="34" rx="6" fill="#F43F5E"/>
-    <rect x="316" y="282" width="22" height="22" rx="5" fill="#F43F5E" opacity="0.85"/>
+  <g filter="url(#drop)">
+    <circle cx="256" cy="262" r="128" fill="url(#globe)"/>
   </g>
-  <!-- latitude / longitude grid -->
-  <g fill="none" stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="5">
-    <circle cx="256" cy="268" r="128"/>
-    <ellipse cx="256" cy="268" rx="56" ry="128"/>
-    <path d="M128 268 H384 M146 204 H366 M146 332 H366"/>
+  <clipPath id="g"><circle cx="256" cy="262" r="128"/></clipPath>
+  <g clip-path="url(#g)">
+    <g opacity="0.95" transform="translate(0 -6)">
+      <path d="M128 230 Q190 200 230 236 T330 250 L384 236 L384 300 Q320 330 270 300 T128 312 Z" fill="#84CC16"/>
+      <path d="M150 330 Q220 300 260 330 T384 340 L384 400 L128 400 Z" fill="#FACC15" opacity="0.9"/>
+      <path d="M220 140 L300 140 L320 200 Q280 220 240 200 Z" fill="#3B82F6" opacity="0.85"/>
+      <rect x="276" y="268" width="34" height="34" rx="6" fill="#F43F5E"/>
+      <rect x="316" y="282" width="22" height="22" rx="5" fill="#F43F5E" opacity="0.85"/>
+    </g>
+    <!-- latitude / longitude grid -->
+    <g fill="none" stroke="#FFFFFF" stroke-opacity="0.5" stroke-width="5">
+      <ellipse cx="256" cy="262" rx="56" ry="128"/>
+      <path d="M128 262 H384 M146 198 H366 M146 326 H366"/>
+    </g>
+    <!-- spherical shading -->
+    <circle cx="256" cy="262" r="128" fill="url(#sphere)"/>
   </g>
+  <circle cx="256" cy="262" r="128" fill="none" stroke="#FFFFFF" stroke-opacity="0.7" stroke-width="5"/>
+
   <!-- orbit with agent nodes -->
-  <ellipse cx="256" cy="268" rx="206" ry="78" fill="none" stroke="#FFFFFF" stroke-width="10" stroke-dasharray="2 22" stroke-linecap="round" transform="rotate(-24 256 268)"/>
-  <g stroke="#FFFFFF" stroke-width="7" stroke-linecap="round">
-    <line x1="88" y1="330" x2="166" y2="196"/>
-    <line x1="166" y1="196" x2="392" y2="172"/>
+  <ellipse cx="256" cy="262" rx="206" ry="78" fill="none" stroke="#FFFFFF" stroke-width="10" stroke-dasharray="2 22" stroke-linecap="round" transform="rotate(-24 256 262)"/>
+  <g stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" filter="url(#drop)">
+    <line x1="88" y1="324" x2="166" y2="190"/>
+    <line x1="166" y1="190" x2="392" y2="166"/>
   </g>
-  <circle cx="392" cy="172" r="70" fill="url(#glow)" opacity="0.6"/>
-  <!-- satellite / agent core -->
-  <g transform="translate(392 172) rotate(-24)">
+  <circle cx="392" cy="166" r="70" fill="url(#glow)" opacity="0.6"/>
+
+  <!-- satellite -->
+  <g transform="translate(392 166) rotate(-24)" filter="url(#drop)">
     <rect x="-58" y="-14" width="34" height="28" rx="4" fill="#22D3EE" stroke="#FFFFFF" stroke-width="5"/>
     <rect x="24" y="-14" width="34" height="28" rx="4" fill="#22D3EE" stroke="#FFFFFF" stroke-width="5"/>
     <circle r="24" fill="#FFFFFF"/>
     <circle r="12" fill="#7C3AED"/>
+    <circle cx="-5" cy="-5" r="4" fill="#FFFFFF" opacity="0.8"/>
   </g>
-  <circle cx="166" cy="196" r="18" fill="#FFFFFF"/>
-  <circle cx="166" cy="196" r="8" fill="#EC4899"/>
-  <circle cx="88" cy="330" r="16" fill="#FFFFFF"/>
-  <circle cx="88" cy="330" r="7" fill="#F97316"/>
+  <g filter="url(#drop)">
+    <circle cx="166" cy="190" r="18" fill="#FFFFFF"/>
+    <circle cx="88" cy="324" r="16" fill="#FFFFFF"/>
+  </g>
+  <circle cx="166" cy="190" r="8" fill="#EC4899"/>
+  <circle cx="88" cy="324" r="7" fill="#F97316"/>
+
+  <!-- AI agent: small 3D robot head -->
+  <g transform="translate(384 352)" filter="url(#drop)">
+    <!-- antenna -->
+    <line x1="0" y1="-40" x2="0" y2="-62" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="0" cy="-68" r="16" fill="url(#glow)"/>
+    <circle cx="0" cy="-68" r="9" fill="#22D3EE" stroke="#FFFFFF" stroke-width="4"/>
+    <!-- ears -->
+    <rect x="-54" y="-14" width="14" height="28" rx="6" fill="#C7D2FE"/>
+    <rect x="40" y="-14" width="14" height="28" rx="6" fill="#C7D2FE"/>
+    <!-- head depth + face -->
+    <rect x="-44" y="-34" width="88" height="76" rx="22" fill="#818CF8"/>
+    <rect x="-44" y="-42" width="88" height="76" rx="22" fill="url(#head)"/>
+    <!-- visor -->
+    <rect x="-34" y="-28" width="68" height="40" rx="14" fill="url(#visor)"/>
+    <circle cx="-14" cy="-8" r="8" fill="#22D3EE"/>
+    <circle cx="14" cy="-8" r="8" fill="#22D3EE"/>
+    <circle cx="-11" cy="-11" r="3" fill="#FFFFFF"/>
+    <circle cx="17" cy="-11" r="3" fill="#FFFFFF"/>
+    <path d="M-10 22 Q0 28 10 22" fill="none" stroke="#7C3AED" stroke-width="5" stroke-linecap="round"/>
+    <!-- gloss on head -->
+    <path d="M-34 -36 Q0 -46 34 -36" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" opacity="0.9"/>
+  </g>
+
   <!-- sparkle = AI -->
-  <path d="M120 96 Q126 122 152 128 Q126 134 120 160 Q114 134 88 128 Q114 122 120 96 Z" fill="#FFFFFF"/>
+  <g filter="url(#drop)">
+    <path d="M120 90 Q126 116 152 122 Q126 128 120 154 Q114 128 88 122 Q114 116 120 90 Z" fill="#FFFFFF"/>
+    <path d="M168 62 Q170 72 180 74 Q170 76 168 86 Q166 76 156 74 Q166 72 168 62 Z" fill="#FFFFFF" opacity="0.85"/>
+  </g>
 </svg>
