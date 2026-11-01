@@ -2,9 +2,12 @@
 
 Open-source tools for a land-use/land-cover (LULC) change, MOLUSCE simulation and SWAT+ hydrology PhD workflow:
 
-- **Streamlit web app** (`streamlit_app/`): upload GeoTIFFs and CSVs, run audited checks and statistics, ask an AI agent that uses the same tools, download a processing log.
-- **QGIS plugin** (`qgis_plugin/lulc_agent/`): the same idea as a chat panel inside QGIS, with approval-gated write tools.
-- **Shared core** (`src/lulc_core/`): tested statistics and raster operations.
+- **Streamlit web app** (`app.py`): upload GeoTIFFs and CSVs, run audited checks and statistics, ask an AI agent that uses the same tools, download a processing log.
+- **Analysis core** (`metrics.py`, `rasterops.py`, `hydro.py`, `knowledge.py`, `store.py`, `session.py`, `agent_tools.py`, `agent.py`): statistics, raster operations and the agent loop.
+
+## Repository layout
+All files sit in the repository root (flat layout), so the whole project can be uploaded through the GitHub web page.
+Modules use plain absolute imports (`import metrics`), so do **not** add an `__init__.py` to the root.
 
 ## What it does
 MOLUSCE geometry checklist (CRS, cell size, rows/columns, origin, NoData), LULC area statistics (ha), from-to transition matrices,
@@ -19,15 +22,16 @@ checks them and evaluates results. AI output can be wrong: verify every number i
 ## Quick start
 ```
 pip install -r requirements.txt
-streamlit run streamlit_app/app.py
+streamlit run app.py
 ```
 Set `ANTHROPIC_API_KEY` (environment variable or `.streamlit/secrets.toml`) to use the Agent tab; the model name is editable in the sidebar.
-Publishing steps: see [docs/DEPLOY.md](docs/DEPLOY.md). Design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+On Streamlit Community Cloud set **Main file path** to `app.py`. With Docker: `docker build -t lulc-agent . && docker run -p 8501:8501 lulc-agent`.
+Only add `ANTHROPIC_API_KEY` to a public deployment's secrets if you accept that visitors spend your credit.
 
 ## Testing status
-`pytest` covers the statistics (including the manual's confusion-matrix example: OA 0.89, kappa 0.853), raster operations on synthetic GeoTIFFs, hydrology
-metrics, the tool registry and an app smoke test. The QGIS plugin sources compile in CI but are **not yet tested inside a live QGIS session**.
-The agent loop has not been tested against the live API in CI. Treat this as research software (v0.2, experimental).
+`pytest -q` runs `test_core.py`: confusion matrix, accuracy and kappa, Pontius disagreement, figure of merit, hydrology metrics, raster area/transition
+statistics on a synthetic in-memory GeoTIFF, and the tool registry. The agent loop has not been tested against the live API.
+Treat this as research software (v0.2, experimental).
 
 ## Data and privacy
 Uploads stay in session memory. The agent sends tool results (not rasters) to the model provider. See [SECURITY.md](SECURITY.md).

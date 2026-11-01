@@ -1,5 +1,5 @@
 import pandas as pd
-from . import metrics
+import metrics
 
 
 def align(obs_df, sim_df, date_col, obs_col, sim_col, start=None, end=None):

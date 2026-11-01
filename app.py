@@ -2,16 +2,23 @@
 import json, sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import pandas as pd
 import streamlit as st
 
-from lulc_core import __version__, hydro, knowledge
-from lulc_core.agent import DEFAULT_MODEL, run_agent
-from lulc_core.session import Session
-
 st.set_page_config(page_title="LULC-MOLUSCE-SWAT+ Agent", page_icon="🛰️", layout="wide")
+
+try:
+    import hydro, knowledge
+    from agent import DEFAULT_MODEL, run_agent
+    from session import Session
+    __version__ = "0.2.1"
+except ImportError as e:  # most common deployment mistake: folders flattened or missing dependencies
+    st.error(f"Cannot import the analysis core: {e}")
+    st.markdown("Check that all .py files from the flat package (metrics, knowledge, store, rasterops, hydro, session, agent_tools, agent) are in the same folder as app.py and that "
+                "`requirements.txt` was installed. ")
+    st.stop()
 
 
 def get_ctx() -> Session:
@@ -229,6 +236,6 @@ with tabs[6]:
 # ---------------- Log ----------------
 with tabs[7]:
     df = ctx.log_df()
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df)
     if len(df):
         st.download_button("Download processing log (CSV)", df.to_csv(index=False), "processing_log.csv", "text/csv")

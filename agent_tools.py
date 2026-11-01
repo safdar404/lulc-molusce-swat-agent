@@ -1,6 +1,6 @@
 """Audited, read-only tools shared by the Streamlit UI and the LLM agent. Nothing touches the file system."""
 import json
-from . import hydro, knowledge, rasterops
+import hydro, knowledge, rasterops
 
 REG = {}
 S = lambda t, d, **k: dict(type=t, description=d, **k)

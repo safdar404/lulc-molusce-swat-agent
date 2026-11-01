@@ -1,0 +1,100 @@
+"""Tests for the flat-layout analysis core. Run with `pytest -q` from the repository root."""
+
+import numpy as np
+import pandas as pd
+import pytest
+from rasterio.crs import CRS
+from rasterio.transform import from_origin
+
+import agent_tools
+import hydro
+import knowledge
+import metrics
+from session import Session
+from store import to_geotiff_bytes
+
+
+# ---------- statistics ----------
+def test_confusion_matrix_and_accuracy_hand_computed():
+    m, cls = metrics.confusion_matrix([1, 1, 2, 2, 2, 3], [1, 2, 2, 2, 3, 3])
+    assert cls == [1, 2, 3]
+    assert m.tolist() == [[1, 1, 0], [0, 2, 1], [0, 0, 1]]
+    r = metrics.accuracy_from_matrix(m)
+    assert r["overall_accuracy"] == pytest.approx(4 / 6)
+    pe = (2 * 1 + 3 * 3 + 1 * 2) / 36
+    assert r["kappa"] == pytest.approx((4 / 6 - pe) / (1 - pe))
+    assert r["producers_accuracy"] == pytest.approx([1 / 2, 2 / 3, 1.0])
+    assert r["users_accuracy"] == pytest.approx([1.0, 2 / 3, 1 / 2])
+
+
+def test_pontius_and_figure_of_merit():
+    d = metrics.pontius_disagreement([[40, 10], [0, 50]])
+    assert d["total"] == pytest.approx(0.10)
+    assert d["quantity"] == pytest.approx(0.10)
+    assert d["allocation"] == pytest.approx(0.0)
+    f = metrics.figure_of_merit([1, 1, 1, 1], [2, 2, 1, 3], [2, 1, 2, 2])
+    assert (f["hits"], f["misses"], f["false_alarms"], f["wrong_hits"]) == (1, 1, 1, 1)
+    assert f["fom"] == pytest.approx(0.25)
+
+
+def test_hydro_metrics():
+    o = np.array([1.0, 2.0, 3.0, 4.0])
+    assert metrics.nse(o, o) == pytest.approx(1.0)
+    assert metrics.kge(o, o) == pytest.approx(1.0)
+    assert metrics.pbias(o, o * 0.9) == pytest.approx(10.0)  # positive = underestimation
+    assert metrics.r2(o, 2 * o + 1) == pytest.approx(1.0)
+    obs = pd.DataFrame({"date": ["2020-01-01", "2020-01-02", "2020-01-03"], "q": [1, 2, 3]})
+    sim = pd.DataFrame({"date": ["2020-01-02", "2020-01-03", "2020-01-04"], "q": [2, 3, 9]})
+    r = hydro.compute(obs, sim, "date", "q", "q")
+    assert r["n_pairs"] == 2 and r["nse"] == pytest.approx(1.0)
+
+
+# ---------- rasters through the tool registry ----------
+def _tif(arr, nodata=0):
+    profile = dict(driver="GTiff", height=arr.shape[0], width=arr.shape[1], count=1, dtype=str(arr.dtype),
+                   crs=CRS.from_epsg(32643), transform=from_origin(500000, 4000000, 30, 30), nodata=nodata)
+    return to_geotiff_bytes(profile, arr, str(arr.dtype), nodata)
+
+
+@pytest.fixture
+def ctx():
+    s = Session()
+    s.store.add("lulc2000.tif", _tif(np.array([[1, 1, 2], [2, 3, 0]], dtype="uint8")))
+    s.store.add("lulc2020.tif", _tif(np.array([[1, 2, 2], [2, 3, 0]], dtype="uint8")))
+    return s
+
+
+def test_area_stats(ctx):
+    r = ctx.call("lulc_area_stats", {"layer": "lulc2000.tif", "labels": {"1": "Water"}})
+    assert "error" not in r, r
+    assert r["pixel_area_m2"] == 900
+    assert r["total_ha"] == pytest.approx(5 * 0.09)
+    assert [c["pixels"] for c in r["classes"]] == [2, 2, 1]
+    assert r["classes"][0]["name"] == "Water"
+
+
+def test_geometry_and_transitions(ctx):
+    g = ctx.call("check_geometry_match", {"layers": ["lulc2000.tif", "lulc2020.tif"]})
+    assert g["all_match"] is True
+    t = ctx.call("transition_matrix", {"old_layer": "lulc2000.tif", "new_layer": "lulc2020.tif"})
+    assert t["top_conversions"][0] == dict(area_ha=0.09, from_code=1, to_code=2)
+    assert t["persistence_percent"] == pytest.approx(80.0)
+    h = ctx.call("hindcast_validation", {"observed": "lulc2020.tif", "simulated": "lulc2000.tif", "initial": "lulc2000.tif"})
+    assert h["compared_pixels"] == 5 and h["figure_of_merit"]["misses"] == 1
+    out = ctx.call("transition_raster", {"old_layer": "lulc2000.tif", "new_layer": "lulc2020.tif", "output_name": "tr.tif"})
+    assert "error" not in out and "tr.tif" in ctx.store.outputs
+
+
+def test_registry_and_log(ctx):
+    names = {s["name"] for s in agent_tools.schemas()}
+    assert {"list_session", "inspect_raster", "hydro_metrics", "practical_guide"} <= names
+    assert agent_tools.run_tool(ctx, "nope", {})["error"].startswith("Unknown tool")
+    assert "error" in ctx.call("inspect_raster", {"layer": "missing.tif"})
+    ctx.call("list_session")
+    assert list(ctx.log_df()["input"]) == ["list_session"]
+
+
+def test_knowledge_guide():
+    assert knowledge.guide("8")["title"] == "Accuracy assessment"
+    assert any(m["practical"] == 19 for m in knowledge.guide("hindcast")["matches"])
+    assert len(knowledge.PRACTICALS) == 30

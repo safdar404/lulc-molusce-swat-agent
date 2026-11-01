@@ -1,7 +1,7 @@
 """Session = store + tables + audit log. Every tool call is logged in the manual's template format."""
 import datetime, json
 import numpy as np, pandas as pd, rasterio
-from .store import Store
+from store import Store
 
 
 class Session:
@@ -20,5 +20,5 @@ class Session:
         return pd.DataFrame(self.log, columns=cols)
 
     def call(self, name, args=None):
-        from .agent_tools import run_tool
+        from agent_tools import run_tool
         return run_tool(self, name, args or {})

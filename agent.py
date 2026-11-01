@@ -1,6 +1,6 @@
 """Anthropic tool-use loop for the web app."""
 import json, os
-from . import agent_tools
+import agent_tools
 
 DEFAULT_MODEL = os.environ.get("LULC_AGENT_MODEL", "claude-sonnet-5-5")  # set LULC_AGENT_MODEL or the sidebar field if needed
 SYSTEM_PROMPT = """You are a senior geospatial research assistant for a PhD workflow:

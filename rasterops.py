@@ -3,8 +3,8 @@ import numpy as np
 from rasterio.transform import rowcol
 from rasterio.warp import transform as warp_transform
 
-from . import metrics
-from .store import to_geotiff_bytes
+import metrics
+from store import to_geotiff_bytes
 
 
 def _projected_metres(r):
