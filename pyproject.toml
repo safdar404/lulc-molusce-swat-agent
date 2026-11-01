@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lulc-molusce-swat-agent"
-version = "0.2.1"
+version = "0.3.0"
 description = "AI-assisted research tools for LULC change detection, MOLUSCE validation and SWAT+ evaluation (Streamlit app)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -16,7 +16,7 @@ dev = ["pytest>=8", "ruff>=0.5"]
 
 # Flat layout: every module sits in the repository root (GitHub web upload cannot create folders).
 [tool.setuptools]
-py-modules = ["agent", "agent_tools", "app", "hydro", "knowledge", "metrics", "rasterops", "session", "store"]
+py-modules = ["agent", "agent_tools", "app", "hydro", "knowledge", "metrics", "rasterops", "session", "store", "ui"]
 
 [tool.pytest.ini_options]
 testpaths = ["."]

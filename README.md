@@ -1,8 +1,11 @@
+<p align="center"><img src="logo.svg" width="140" alt="LULC Agent logo"/></p>
+
 # LULC - MOLUSCE - SWAT+ Research Agent
 
 Open-source tools for a land-use/land-cover (LULC) change, MOLUSCE simulation and SWAT+ hydrology PhD workflow:
 
 - **Streamlit web app** (`app.py`): upload GeoTIFFs and CSVs, run audited checks and statistics, ask an AI agent that uses the same tools, download a processing log.
+- **Look and feel** (`ui.py`, `logo.svg`, `logo.png`): vibrant multi-colour theme, logo, hero header, colour-coded metric cards and charts.
 - **Analysis core** (`metrics.py`, `rasterops.py`, `hydro.py`, `knowledge.py`, `store.py`, `session.py`, `agent_tools.py`, `agent.py`): statistics, raster operations and the agent loop.
 
 ## Repository layout

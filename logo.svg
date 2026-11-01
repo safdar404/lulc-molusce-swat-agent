@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="LULC Agent logo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7C3AED"/>
+      <stop offset="0.38" stop-color="#EC4899"/>
+      <stop offset="0.7" stop-color="#F97316"/>
+      <stop offset="1" stop-color="#FACC15"/>
+    </linearGradient>
+    <linearGradient id="globe" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22D3EE"/>
+      <stop offset="0.55" stop-color="#10B981"/>
+      <stop offset="1" stop-color="#065F46"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- rounded hexagon badge -->
+  <path d="M256 20 L460 138 Q476 147 476 166 L476 346 Q476 365 460 374 L256 492 Q240 501 224 492 L52 374 Q36 365 36 346 L36 166 Q36 147 52 138 L224 20 Q240 11 256 20 Z" transform="translate(16 0) scale(0.97 1)" fill="url(#bg)"/>
+  <!-- globe made of land-cover patches -->
+  <circle cx="256" cy="268" r="128" fill="url(#globe)"/>
+  <clipPath id="g"><circle cx="256" cy="268" r="128"/></clipPath>
+  <g clip-path="url(#g)" opacity="0.95">
+    <path d="M128 230 Q190 200 230 236 T330 250 L384 236 L384 300 Q320 330 270 300 T128 312 Z" fill="#84CC16"/>
+    <path d="M150 330 Q220 300 260 330 T384 340 L384 400 L128 400 Z" fill="#FACC15" opacity="0.9"/>
+    <path d="M220 140 L300 140 L320 200 Q280 220 240 200 Z" fill="#3B82F6" opacity="0.85"/>
+    <rect x="276" y="268" width="34" height="34" rx="6" fill="#F43F5E"/>
+    <rect x="316" y="282" width="22" height="22" rx="5" fill="#F43F5E" opacity="0.85"/>
+  </g>
+  <!-- latitude / longitude grid -->
+  <g fill="none" stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="5">
+    <circle cx="256" cy="268" r="128"/>
+    <ellipse cx="256" cy="268" rx="56" ry="128"/>
+    <path d="M128 268 H384 M146 204 H366 M146 332 H366"/>
+  </g>
+  <!-- orbit with agent nodes -->
+  <ellipse cx="256" cy="268" rx="206" ry="78" fill="none" stroke="#FFFFFF" stroke-width="10" stroke-dasharray="2 22" stroke-linecap="round" transform="rotate(-24 256 268)"/>
+  <g stroke="#FFFFFF" stroke-width="7" stroke-linecap="round">
+    <line x1="88" y1="330" x2="166" y2="196"/>
+    <line x1="166" y1="196" x2="392" y2="172"/>
+  </g>
+  <circle cx="392" cy="172" r="70" fill="url(#glow)" opacity="0.6"/>
+  <!-- satellite / agent core -->
+  <g transform="translate(392 172) rotate(-24)">
+    <rect x="-58" y="-14" width="34" height="28" rx="4" fill="#22D3EE" stroke="#FFFFFF" stroke-width="5"/>
+    <rect x="24" y="-14" width="34" height="28" rx="4" fill="#22D3EE" stroke="#FFFFFF" stroke-width="5"/>
+    <circle r="24" fill="#FFFFFF"/>
+    <circle r="12" fill="#7C3AED"/>
+  </g>
+  <circle cx="166" cy="196" r="18" fill="#FFFFFF"/>
+  <circle cx="166" cy="196" r="8" fill="#EC4899"/>
+  <circle cx="88" cy="330" r="16" fill="#FFFFFF"/>
+  <circle cx="88" cy="330" r="7" fill="#F97316"/>
+  <!-- sparkle = AI -->
+  <path d="M120 96 Q126 122 152 128 Q126 134 120 160 Q114 134 88 128 Q114 122 120 96 Z" fill="#FFFFFF"/>
+</svg>
