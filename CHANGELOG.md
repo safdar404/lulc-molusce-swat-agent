@@ -1,4 +1,12 @@
 # Changelog
+## 0.4.1
+- Fix: the page could freeze the browser tab (and drop the connection, showing "Oh no. Error running app"). The always-on floating
+  logo animation forced constant redraws of the filtered SVG, halving the frame rate. The logo now moves only on hover, uses a
+  10 KB pre-rendered PNG (`logo_small.png`), and page-wide perspective, fixed backgrounds and backdrop blur were removed. Idle cost is now zero.
+- Agent: API failures (no credit, bad key, unknown model, rate limit, outage) show a plain explanation instead of raw JSON, the failed
+  question no longer corrupts the conversation, and a built-in analysis of the loaded data is shown instead.
+- New "Quick analysis" button and offline mode without an API key; new `describe_table` tool for any CSV.
+- Guide tab: the MOLUSCE / QSWAT+ note is rewritten as a workflow tip.
 ## 0.4.0
 - Logo: added a small AI-agent robot head and a 3D look (extruded hexagon badge, glossy face, shaded globe, drop shadows).
 - 3D interface: tilted hero slab with a perspective grid and floating logo, extruded push-down buttons, raised tab pills in a recessed tray,

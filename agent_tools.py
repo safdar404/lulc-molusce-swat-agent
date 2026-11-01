@@ -24,6 +24,24 @@ def list_session(ctx):
     return dict(rasters=ctx.store.names(), tables={k: list(v.columns) for k, v in ctx.tables.items()}, outputs=list(ctx.store.outputs))
 
 
+@tool("describe_table", "Rows, columns, data types, missing values, numeric statistics and top categories of one uploaded CSV table.",
+      {"table": STR("Table name")}, ["table"])
+def _describe(ctx, table):
+    if table not in ctx.tables:
+        raise ValueError(f"Table not loaded: {table}. Loaded: {list(ctx.tables)}")
+    df = ctx.tables[table]
+    num = df.select_dtypes("number")
+    cats = {}
+    for c in df.columns.difference(num.columns)[:15]:
+        vc = df[c].astype(str).value_counts()
+        cats[c] = dict(unique=int(vc.size), top=vc.head(5).to_dict())
+    return dict(table=table, rows=int(len(df)), columns=int(df.shape[1]),
+                dtypes={c: str(t) for c, t in df.dtypes.items()},
+                missing={c: int(n) for c, n in df.isna().sum().items() if n},
+                numeric_summary=num.describe().T.round(4).to_dict(orient="index") if not num.empty else {},
+                categorical_summary=cats)
+
+
 @tool("inspect_raster", "CRS, size, pixel size, origin, NoData, min/max and class values of one raster.", {"layer": STR("Raster name")}, ["layer"])
 def _inspect(ctx, layer):
     return rasterops.inspect(ctx.store, layer)

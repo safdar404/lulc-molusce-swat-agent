@@ -7,17 +7,21 @@ import streamlit as st
 HERE = Path(__file__).resolve().parent
 LOGO_SVG = HERE / "logo.svg"
 LOGO_PNG = HERE / "logo.png"
+LOGO_SMALL = HERE / "logo_small.png"  # pre-rendered: cheap to draw, unlike the filtered SVG
 
 # Vibrant categorical palette (used for charts and accents)
 PALETTE = ["#7C3AED", "#EC4899", "#F97316", "#FACC15", "#10B981", "#06B6D4", "#3B82F6", "#F43F5E"]
 GRADIENT = "linear-gradient(120deg, #7C3AED 0%, #EC4899 35%, #F97316 68%, #FACC15 100%)"
 
 
+@st.cache_data(show_spinner=False)
 def logo_data_uri():
-    try:
-        return "data:image/svg+xml;base64," + base64.b64encode(LOGO_SVG.read_bytes()).decode()
-    except OSError:
-        return ""
+    for path, mime in ((LOGO_SMALL, "image/png"), (LOGO_SVG, "image/svg+xml")):
+        try:
+            return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode()
+        except OSError:
+            continue
+    return ""
 
 
 def page_icon():
@@ -44,7 +48,6 @@ html, body, [class*="css"], .stMarkdown, button, input, textarea { font-family: 
     radial-gradient(900px 420px at 0% 0%, rgba(124,58,237,.13), transparent 60%),
     radial-gradient(800px 380px at 100% 0%, rgba(236,72,153,.11), transparent 60%),
     radial-gradient(900px 500px at 50% 100%, rgba(6,182,212,.10), transparent 60%);
-  background-attachment: fixed;
 }
 [data-testid="stHeader"] { background: transparent; }
 .block-container { padding-top: 2.2rem; max-width: 1280px; }
@@ -59,7 +62,7 @@ html, body, [class*="css"], .stMarkdown, button, input, textarea { font-family: 
 .hero p { margin:6px 0 12px; opacity:.95; font-size:1.02rem; color:#fff; }
 .chips { display:flex; flex-wrap:wrap; gap:8px; position:relative; z-index:1; }
 .chip { background: rgba(255,255,255,.2); border:1px solid rgba(255,255,255,.35); color:#fff; padding:4px 12px;
-  border-radius:999px; font-size:.8rem; font-weight:600; backdrop-filter: blur(6px); }
+  border-radius:999px; font-size:.8rem; font-weight:600; }
 @media (max-width: 640px) { .hero { flex-direction:column; text-align:center; padding:22px 18px; } .chips { justify-content:center; } .hero h1 { font-size:1.55rem; } }
 
 /* section headings */
@@ -142,7 +145,6 @@ html, body, [class*="css"], .stMarkdown, button, input, textarea { font-family: 
 .flow span { padding:6px 12px; border-radius:999px; font-size:.8rem; font-weight:700; color:#fff; }
 .foot { text-align:center; opacity:.65; font-size:.8rem; margin-top:28px; }
 /* ===================== 3D layer ===================== */
-.block-container { perspective: 1600px; }
 
 /* hero: raised slab with an edge, glossy top, perspective grid floor and floating 3D logo */
 .hero { transform-style: preserve-3d; transform: perspective(1400px) rotateX(3deg); transform-origin: 50% 100%;
@@ -154,12 +156,12 @@ html, body, [class*="css"], .stMarkdown, button, input, textarea { font-family: 
   background-image: linear-gradient(rgba(255,255,255,.22) 1.5px, transparent 1.5px), linear-gradient(90deg, rgba(255,255,255,.22) 1.5px, transparent 1.5px);
   background-size: 44px 44px; transform: perspective(380px) rotateX(62deg); transform-origin: 50% 100%;
   -webkit-mask-image: linear-gradient(to top, #000 10%, transparent 85%); mask-image: linear-gradient(to top, #000 10%, transparent 85%); }
-.hero img { width:112px; height:112px; animation: float3d 6s ease-in-out infinite;
-  filter: drop-shadow(0 18px 18px rgba(30,27,75,.45)) drop-shadow(0 4px 4px rgba(30,27,75,.3)); }
+.hero img { width:112px; height:112px; filter: drop-shadow(0 14px 12px rgba(30,27,75,.4));
+  transform: rotate(-4deg); transition: transform .5s cubic-bezier(.2,.8,.2,1); }
+.hero:hover img { transform: translateY(-8px) rotate(4deg) scale(1.04); }
 .hero h1 { text-shadow: 0 1px 0 #DB2777, 0 2px 0 #BE185D, 0 3px 0 #9D174D, 0 4px 0 #831843, 0 10px 18px rgba(0,0,0,.35); }
 .chip { box-shadow: 0 3px 0 rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.45); transition: transform .2s; }
 .chip:hover { transform: translateY(-2px); }
-@keyframes float3d { 0%,100% { transform: translateY(0) rotateY(-12deg) rotateX(4deg); } 50% { transform: translateY(-10px) rotateY(12deg) rotateX(-4deg); } }
 
 /* section icon tiles: little 3D blocks */
 .sec .ico { box-shadow: inset 0 2px 0 rgba(255,255,255,.45), inset 0 -3px 0 rgba(0,0,0,.18), 0 4px 0 rgba(0,0,0,.22), 0 12px 18px -8px rgba(0,0,0,.45);
@@ -210,7 +212,8 @@ html, body, [class*="css"], .stMarkdown, button, input, textarea { font-family: 
 [data-baseweb="select"] > div, [data-baseweb="input"] { box-shadow: inset 0 2px 5px rgba(30,27,75,.10); }
 
 /* sidebar: glass tiles with depth */
-.side-brand img { filter: drop-shadow(0 8px 10px rgba(0,0,0,.45)); animation: float3d 7s ease-in-out infinite; }
+.side-brand img { filter: drop-shadow(0 6px 8px rgba(0,0,0,.45)); transition: transform .4s; }
+.side-brand:hover img { transform: translateY(-4px) rotate(-6deg); }
 .stat { box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 4px 0 rgba(0,0,0,.25), 0 10px 18px -8px rgba(0,0,0,.6);
   background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.06)); }
 .stat b { text-shadow: 0 2px 0 rgba(0,0,0,.3); }
@@ -219,7 +222,7 @@ html, body, [class*="css"], .stMarkdown, button, input, textarea { font-family: 
 [data-testid="stChatMessage"] { box-shadow: 0 4px 0 rgba(124,58,237,.10), 0 14px 24px -16px rgba(76,29,149,.5); }
 
 @media (prefers-reduced-motion: reduce) {
-  .hero img, .side-brand img { animation: none; }
+  .hero img, .side-brand img, .hero:hover img, .side-brand:hover img { transition: none; transform: none; }
   .hero, .hero:hover, [data-testid="stMetric"], [data-testid="stMetric"]:hover, .pcard, .pcard:hover { transition: none; }
 }
 @media (max-width: 640px) { .hero { transform: none; } }

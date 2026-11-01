@@ -14,9 +14,9 @@ ui.apply_theme()
 
 try:
     import hydro, knowledge
-    from agent import DEFAULT_MODEL, run_agent
+    from agent import DEFAULT_MODEL, friendly_error, offline_analysis, run_agent
     from session import Session
-    __version__ = "0.4.0"
+    __version__ = "0.4.1"
 except ImportError as e:  # most common deployment mistake: folders flattened or missing dependencies
     st.error(f"Cannot import the analysis core: {e}")
     st.markdown("Check that all .py files from the flat package (metrics, knowledge, store, rasterops, hydro, session, agent_tools, agent) are in the same folder as app.py and that "
@@ -101,7 +101,8 @@ with tabs[0]:
     ui.practical_card(n, t, d, v)
     st.write("")
     st.dataframe(pd.DataFrame([(i, p[0], p[1]) for i, p in knowledge.PRACTICALS.items()], columns=["#", "Practical", "Deliverable"]), hide_index=True)
-    st.warning("This app does not run MOLUSCE's ANN/CA or QSWAT+. Run those in QGIS, then bring results here to evaluate them.")
+    st.info("**How this fits your workflow:** run MOLUSCE (ANN / cellular automata) and QSWAT+ in QGIS as usual, then upload their outputs here "
+            "to check raster geometry, validate the hindcast (kappa, figure of merit) and score SWAT+ runs (NSE, PBIAS, KGE).", icon="🧭")
 
 # ---------------- Inspect ----------------
 with tabs[1]:
@@ -233,23 +234,29 @@ with tabs[5]:
 
 # ---------------- Agent ----------------
 with tabs[6]:
-    ui.section("🤖", "Research agent", "Calls the same audited tools as the other tabs. It cannot run MOLUSCE or QSWAT+.", "violet")
+    ui.section("🤖", "Research agent", "Calls the same audited tools as the other tabs and evaluates MOLUSCE / QSWAT+ results you bring from QGIS.", "violet")
     for role, text in st.session_state.chat:
         is_user = role not in ("assistant", "tool", "error")
         with st.chat_message("user" if is_user else "assistant", avatar="🧑‍🔬" if is_user else ui.page_icon()):
             st.markdown(f"`{text}`" if role == "tool" else text)
+    if not key:
+        st.info("No API key set: answers come from the built-in analysis (no AI). Add an Anthropic key in the sidebar for the full agent.")
+    if st.button("⚡ Quick analysis of loaded data (no AI needed)"):
+        st.session_state.chat.append(("assistant", offline_analysis(ctx)))
+        st.rerun()
     q = st.chat_input("Ask about your data or the workflow...")
     if q:
+        st.session_state.chat.append(("user", q))
         if not key:
-            st.error("Enter your API key in the sidebar first.")
+            st.session_state.chat.append(("assistant", offline_analysis(ctx)))
         else:
-            st.session_state.chat.append(("user", q))
             with st.spinner("Working..."):
                 try:
                     st.session_state.chat += run_agent(key, model, st.session_state.msgs, ctx, q)
                 except Exception as e:
-                    st.session_state.chat.append(("error", f"{type(e).__name__}: {str(e)[:300]}"))
-            st.rerun()
+                    st.session_state.chat.append(("error", friendly_error(e)))
+                    st.session_state.chat.append(("assistant", offline_analysis(ctx)))
+        st.rerun()
 
 # ---------------- Log ----------------
 with tabs[7]:

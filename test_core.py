@@ -98,3 +98,43 @@ def test_knowledge_guide():
     assert knowledge.guide("8")["title"] == "Accuracy assessment"
     assert any(m["practical"] == 19 for m in knowledge.guide("hindcast")["matches"])
     assert len(knowledge.PRACTICALS) == 30
+
+
+def test_describe_table_and_offline_analysis(ctx):
+    import agent
+    ctx.tables["pts.csv"] = pd.DataFrame({"x": [1.0, 2.0, None], "y": [3.0, 4.0, 5.0], "cls": ["a", "b", "a"]})
+    d = ctx.call("describe_table", {"table": "pts.csv"})
+    assert d["rows"] == 3 and d["missing"] == {"x": 1} and d["categorical_summary"]["cls"]["unique"] == 2
+    text = agent.offline_analysis(ctx)
+    assert "pts.csv" in text and "lulc2000.tif" in text and "share one grid" in text and "Accuracy" in text
+
+
+def test_friendly_error_messages():
+    import agent
+
+    class BadRequestError(Exception):
+        pass
+    assert "no credit" in agent.friendly_error(BadRequestError("Your credit balance is too low to access the Anthropic API"))
+    assert "rejected" in agent.friendly_error(type("AuthenticationError", (Exception,), {})("invalid x-api-key"))
+
+
+def test_run_agent_rolls_back_history_on_failure(monkeypatch):
+    import sys
+    import types
+
+    import agent
+
+    class Boom(Exception):
+        pass
+
+    class Client:
+        def __init__(self, api_key):
+            self.messages = self
+
+        def create(self, **kw):
+            raise Boom("credit balance is too low")
+    monkeypatch.setitem(sys.modules, "anthropic", types.SimpleNamespace(Anthropic=Client))
+    msgs = []
+    with pytest.raises(Boom):
+        agent.run_agent("k", "m", msgs, Session(), "hi")
+    assert msgs == []
