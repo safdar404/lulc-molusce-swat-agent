@@ -1,4 +1,9 @@
 # Changelog
+## 1.4.5
+- **Background jobs for composites** (`jobs.py`): the download runs in its own thread kept in the session, and the page polls its
+  progress every 3 s. Before, a rerun (which Streamlit triggers when the browser's websocket reconnects: a sleeping laptop, a slow link,
+  a throttled background tab) cancelled the 10-minute Astore composite in progress.
+
 ## 1.4.4
 - **Gap fill for persistently flagged pixels** (on by default): pixels that the cloud mask rejected in EVERY scene but that were observed
   take the median of all valid observations, reported separately as "gap-filled" (observation count 0). With the 1.4.3 rule alone the

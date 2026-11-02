@@ -1,11 +1,25 @@
-"""Streamlit tab (v1.3.0): download cloud-free composites, DEM and WorldCover for an area of interest."""
+"""Streamlit tab (v1.3.0, background jobs v1.4.5): download cloud-free composites, DEM and WorldCover for an area of interest."""
 import datetime
 
 import pandas as pd
 import streamlit as st
 
 import imagery as I
+import jobs
 import ui
+
+
+@st.fragment(run_every=3)
+def _poll_job():
+    """Progress of the background composite; reruns the whole page once it has finished."""
+    job = st.session_state.get("img_job")
+    if job is None:
+        return
+    if job.running:
+        st.progress(job.progress, f"{job.message} · {job.elapsed / 60:.1f} min")
+        st.caption("Runs in the background on the server: reloading the page or a dropped connection no longer cancels it.")
+    else:
+        st.rerun(scope="app")
 
 
 def _client():
@@ -111,23 +125,29 @@ def render(ctx, R):
                    "will be combined.")
         if rows:
             st.dataframe(pd.DataFrame(rows).head(30), hide_index=True)
-    if c[1].button("⬇️ Download composite", type="primary"):
-        bar = st.progress(0.0, "Starting…")
-        try:
-            res_ = I.download_composite(ctx.store, _client(), product, bbox, start.isoformat(), end.isoformat(), cloud, int(nsc), res, template, out,
-                                        progress=lambda f, msg: bar.progress(float(f), msg), statistic=stat, platforms=plats, clip=clip, strict_mask=strict, fill_gaps=fill)
+    job = st.session_state.get("img_job")
+    if c[1].button("⬇️ Download composite", type="primary", disabled=bool(job and job.running)):
+        job = jobs.Job("composite", I.download_composite, ctx.store, _client(), product, bbox, start.isoformat(), end.isoformat(), cloud, int(nsc),
+                       res, template, out, statistic=stat, platforms=plats, clip=clip, strict_mask=strict, fill_gaps=fill)
+        job.meta = {"product": product, "bbox": bbox, "template": template, "start": str(start), "end": str(end), "max_cloud": cloud,
+                    "scenes": int(nsc), "res": res}
+        st.session_state.img_job = job
+    if job is not None and job.running:
+        _poll_job()
+    elif job is not None and not job.consumed:
+        job.consumed = True
+        st.session_state.img_err = f"Download failed after {job.elapsed / 60:.1f} min: {job.error}" if job.error else None
+        if not job.error:
+            res_ = job.result
             ctx.store.add(res_["output"], ctx.store.outputs[res_["output"]])
             ctx.store.add(res_["observation_count"], ctx.store.outputs[res_["observation_count"]])
-            ctx.record("download_composite", {"product": product, "bbox": bbox, "template": template, "start": str(start), "end": str(end),
-                                              "max_cloud": cloud, "scenes": int(nsc), "res": res}, f"{res_['output']} {res_['size']}")
-            ctx.__dict__.setdefault("results", []).append(dict(tool="download_composite", args=dict(product=product), result=res_,
+            ctx.record("download_composite", job.meta, f"{res_['output']} {res_['size']} in {job.elapsed / 60:.1f} min")
+            ctx.__dict__.setdefault("results", []).append(dict(tool="download_composite", args=dict(product=job.meta["product"]), result=res_,
                                                                time=datetime.datetime.now().isoformat(timespec="seconds")))
             st.session_state.img_res = res_
-            bar.progress(1.0, "Done")
             st.rerun()
-        except Exception as e:  # noqa: BLE001
-            bar.empty()
-            st.error(f"Download failed: {type(e).__name__}: {e}")
+    if st.session_state.get("img_err"):
+        st.error(st.session_state.img_err)
     r = st.session_state.get("img_res")
     if r:
         m = st.columns(4)

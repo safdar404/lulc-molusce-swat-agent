@@ -9,7 +9,7 @@ import importlib  # noqa: E402
 
 # Streamlit re-runs app.py when it changes but keeps helper modules cached. After a multi-file update that leaves
 # a stale mix (e.g. "cannot import name ... from 'agent'"), so reload every local module whose file changed.
-_LOCAL_MODULES = ["metrics", "knowledge", "store", "rasterops", "olofsson", "intensity", "changeops", "landscape", "hotspot", "patternops", "classify", "simulate", "swatlink", "vectorops", "imagery", "cryo", "cartography", "report", "app_version", "hydro", "session", "agent_tools", "agent", "ui", "advanced_tabs", "pattern_tab", "classify_tab", "simulate_tab", "swat_tab", "vector_tab", "imagery_tab", "cryo_tab", "report_tab", "live", "canvas_tab"]  # dependency order
+_LOCAL_MODULES = ["metrics", "knowledge", "store", "rasterops", "olofsson", "intensity", "changeops", "landscape", "hotspot", "patternops", "classify", "simulate", "swatlink", "vectorops", "imagery", "jobs", "cryo", "cartography", "report", "app_version", "hydro", "session", "agent_tools", "agent", "ui", "advanced_tabs", "pattern_tab", "classify_tab", "simulate_tab", "swat_tab", "vector_tab", "imagery_tab", "cryo_tab", "report_tab", "live", "canvas_tab"]  # dependency order
 for _name in _LOCAL_MODULES:
     _mod = sys.modules.get(_name)
     if _mod is not None and getattr(_mod, "__file__", None):

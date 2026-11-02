@@ -225,3 +225,22 @@ def test_gap_fill_for_persistently_flagged_glacier(tmp_path):
     np.testing.assert_allclose(g.bands[0][~g.mask] / 1e4, 21000 * 2.75e-5 - 0.2, atol=2e-4)   # median of the three scenes everywhere
     r2 = I.download_composite(s.store, client, "Landsat 4-9 C2 L2", bb, "2025-08-01", "2025-09-30", 50, 4, output_name="n.tif", fill_gaps=False)
     assert r2["gap_filled_pct"] == 0 and r2["pixels_with_data_pct"] == pytest.approx(r["clear_pct"])
+
+
+def test_background_job_survives_and_reports():
+    """v1.4.5: long downloads run in a thread (jobs.Job), so a page rerun or websocket reconnect no longer cancels them."""
+    import jobs
+
+    def work(n, progress=None):
+        for i in range(n):
+            progress((i + 1) / n, f"step {i + 1}")
+        return {"n": n}
+
+    def boom(progress=None):
+        progress(0.5, "half")
+        raise ValueError("no scenes")
+
+    j = jobs.Job("ok", work, 4)
+    assert j.wait(5) and not j.running and j.result == {"n": 4} and j.progress == 1.0 and j.error is None and j.elapsed >= 0
+    e = jobs.Job("bad", boom)
+    assert e.wait(5) and e.result is None and e.error == "ValueError: no scenes" and "boom" in e.detail
