@@ -1,4 +1,21 @@
 # Changelog
+## 1.1.0
+- **Vector support** (`vectorops.py`, `vector_tab.py`, new **🧭 Vector tools** tab and a sidebar uploader).
+  - Reads zipped shapefiles (any folder depth), shapefile parts uploaded together, GeoPackage, GeoJSON, KML and FlatGeobuf. Invalid
+    geometries are repaired. Every operation reprojects to the raster CRS, so WGS84 vectors work with UTM rasters.
+  - **Describe and preview** a layer over any raster, with its attribute table.
+  - **Rasterize** a numeric field, a text field (coded 1..n, lookup returned) or a constant onto any raster grid, with an all-touched
+    option for lines. Use the output for roads and rivers as distance drivers, protected-area masks, hydrologic soil groups or zones.
+  - **Training samples from polygons**: pixel centres per class with a polygon ID; **points → table** for GPS validation points.
+  - **Zonal statistics**: class area and % per polygon with the majority class (categorical), or mean / std / min / max / median
+    (continuous), e.g. LULC composition of SWAT+ sub-basins or districts.
+  - **Polygonize** any categorical raster (classified map, hotspot clusters, change map) and download it as GeoPackage or GeoJSON.
+- Classification: when the training table has a `polygon_id` column, the classifier also reports **polygon-grouped
+  cross-validation**, so pixels of one polygon are never split between training and testing.
+- SWAT+ link tab: map selection now defaults to categorical rasters.
+- Agent: new tools `describe_vector`, `rasterize_vector`, `vector_training_samples`, `vector_points_to_table`, `zonal_statistics`,
+  `polygonize_raster`; `list_session` reports vector layers.
+- New dependencies: `geopandas`, `pyogrio`.
 ## 1.0.0
 - New **🌊 SWAT+ link** tab (`swatlink.py`, `swat_tab.py`), which closes the workflow from imagery to hydrology.
   - **LULC → SWAT+ codes**: editable class table with codes suggested from class names, a QSWAT+ landuse lookup CSV

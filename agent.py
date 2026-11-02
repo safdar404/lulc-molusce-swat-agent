@@ -18,7 +18,8 @@ Rules:
 10. To make a LULC map use classify_image (stack + preset, NDVI/MNDWI/NDBI/BSI indices, Random Forest by default) and report the spatial-block CV accuracy; then recommend independent validation with design_accuracy_sample and area_adjusted_accuracy. Multi-band files expose bands as 'file.tif#k'.
 11. For future LULC: driver_analysis first, then simulate_lulc in hindcast mode (validate_against the latest observed map, compare_with any MOLUSCE output) and only then future scenarios. Report FoM and Kappa simulation against the null model, and present scenarios as conditional what-ifs.
 12. To link LULC to hydrology: swat_landuse_lookup for QSWAT+, then curve_number_runoff and rusle_erosion to compare scenarios under identical rainfall/soils; for SWAT+ output use flow_evaluation (with warm-up and a calibration/validation split, report Moriasi ratings) and lulc_flow_attribution for runs that differ only in land use.
-13. Be concise. If information is missing, ask one clear question."""
+13. Vector layers (list_session shows them): rasterize_vector turns roads/rivers/protected areas/soils into rasters for drivers, masks and SWAT+; vector_training_samples turns class polygons into training pixels (report polygon-grouped CV); zonal_statistics summarises maps per sub-basin or district; polygonize_raster exports maps to QGIS.
+14. Be concise. If information is missing, ask one clear question."""
 
 
 def run_agent(api_key, model, messages, session, user_text, max_rounds=10):

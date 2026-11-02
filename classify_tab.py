@@ -162,13 +162,15 @@ def render(ctx, R):
             with c[1]:
                 if "spatial_block_kfold" in cv:
                     _cv_block("Spatial block k-fold (report this)", cv["spatial_block_kfold"])
+            if "polygon_group_kfold" in cv:
+                _cv_block("Polygon-grouped k-fold (pixels of one polygon never split between train and test)", cv["polygon_group_kfold"])
             if "optimism_gap_oa" in cv:
                 st.caption(f"Optimism of random CV: {100 * cv['optimism_gap_oa']:+.1f} percentage points of overall accuracy.")
-            sp = cv.get("spatial_block_kfold") or cv.get("random_kfold")
+            sp = cv.get("polygon_group_kfold") or cv.get("spatial_block_kfold") or cv.get("random_kfold")
             cls = [str(k) for k in sp["classes"]]
             names = [f"{k} {(labels or {}).get(k, '')}".strip() for k in cls]
             c = st.columns(2)
-            c[0].markdown("**Per class (spatial CV)**")
+            c[0].markdown("**Per class (" + ("polygon-grouped" if "polygon_group_kfold" in cv else "spatial") + " CV)**")
             c[0].dataframe(pd.DataFrame({"class": names, "producer's": sp["producers_accuracy"], "user's": sp["users_accuracy"], "F1": sp["f1"]}).round(3), hide_index=True)
             c[1].markdown("**Confusion matrix** (rows reference, columns predicted)")
             c[1].dataframe(pd.DataFrame(sp["confusion_matrix_rows_reference_cols_predicted"], index=names, columns=names))

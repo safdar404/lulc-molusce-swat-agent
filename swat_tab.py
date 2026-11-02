@@ -31,6 +31,14 @@ def _class_table(ctx, layers, key):
     return labels, swat
 
 
+def _is_categorical(r):
+    import numpy as np
+    if r.data.dtype.kind not in "iu":
+        return False
+    sample = r.data[::7, ::7][~r.mask[::7, ::7]]
+    return np.unique(sample).size <= 60
+
+
 def _num_or_layer(label, R, default, key, fmt="%.4f"):
     c = st.columns([2, 1])
     v = c[0].number_input(label, value=float(default), format=fmt, key=f"{key}_n")
@@ -45,7 +53,8 @@ def render(ctx, R):
     if not maps:
         st.info("Upload LULC maps (observed, classified or simulated scenarios) in the sidebar.")
     else:
-        layers = st.multiselect("LULC maps (first = baseline)", maps, default=maps[: min(2, len(maps))], key="sw_layers")
+        cat = [m for m in maps if _is_categorical(ctx.store.get(m))]
+        layers = st.multiselect("LULC maps (first = baseline)", maps, default=cat[: min(2, len(cat))], key="sw_layers")
         if layers:
             st.caption("Type class names to get suggested SWAT+ codes, then adjust the codes. The table is used by every section below.")
             labels, swat = _class_table(ctx, layers, "sw")

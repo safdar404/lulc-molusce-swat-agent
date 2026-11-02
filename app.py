@@ -9,7 +9,7 @@ import importlib  # noqa: E402
 
 # Streamlit re-runs app.py when it changes but keeps helper modules cached. After a multi-file update that leaves
 # a stale mix (e.g. "cannot import name ... from 'agent'"), so reload every local module whose file changed.
-_LOCAL_MODULES = ["metrics", "knowledge", "store", "rasterops", "olofsson", "intensity", "changeops", "landscape", "hotspot", "patternops", "classify", "simulate", "swatlink", "hydro", "session", "agent_tools", "agent", "ui", "advanced_tabs", "pattern_tab", "classify_tab", "simulate_tab", "swat_tab", "cartography", "live", "canvas_tab"]  # dependency order
+_LOCAL_MODULES = ["metrics", "knowledge", "store", "rasterops", "olofsson", "intensity", "changeops", "landscape", "hotspot", "patternops", "classify", "simulate", "swatlink", "vectorops", "hydro", "session", "agent_tools", "agent", "ui", "advanced_tabs", "pattern_tab", "classify_tab", "simulate_tab", "swat_tab", "vector_tab", "cartography", "live", "canvas_tab"]  # dependency order
 for _name in _LOCAL_MODULES:
     _mod = sys.modules.get(_name)
     if _mod is not None and getattr(_mod, "__file__", None):
@@ -28,17 +28,17 @@ st.set_page_config(page_title="LULC-MOLUSCE-SWAT+ Agent", page_icon=ui.page_icon
 ui.apply_theme()
 
 try:
-    import advanced_tabs, canvas_tab, classify_tab, hydro, knowledge, pattern_tab, simulate_tab, swat_tab
+    import advanced_tabs, canvas_tab, classify_tab, hydro, knowledge, pattern_tab, simulate_tab, swat_tab, vector_tab, vectorops
     from agent import DEFAULT_MODEL, friendly_error, offline_analysis, run_agent
     from session import Session
-    __version__ = "1.0.0"
+    __version__ = "1.1.0"
     for _name in _LOCAL_MODULES:
         _mod = sys.modules.get(_name)
         if _mod is not None and getattr(_mod, "__file__", None):
             _mod._file_mtime = Path(_mod.__file__).stat().st_mtime
 except ImportError as e:  # most common deployment mistake: folders flattened or missing dependencies
     st.error(f"Cannot import the analysis core: {e}")
-    st.markdown("Check that all .py files from the flat package (metrics, knowledge, store, rasterops, olofsson, intensity, changeops, landscape, hotspot, patternops, classify, simulate, swatlink, hydro, session, agent_tools, agent, advanced_tabs, pattern_tab, classify_tab, simulate_tab, swat_tab) are in the same folder as app.py and that "
+    st.markdown("Check that all .py files from the flat package (metrics, knowledge, store, rasterops, olofsson, intensity, changeops, landscape, hotspot, patternops, classify, simulate, swatlink, vectorops, hydro, session, agent_tools, agent, advanced_tabs, pattern_tab, classify_tab, simulate_tab, swat_tab, vector_tab) are in the same folder as app.py and that "
                 "`requirements.txt` was installed. ")
     st.stop()
 
@@ -72,6 +72,16 @@ with st.sidebar:
                 ctx.tables[f.name] = pd.read_csv(f)
             except Exception as e:
                 st.error(f"{f.name}: {e}")
+    vfiles = st.file_uploader("🧭 Vectors: zipped shapefile, GeoPackage, GeoJSON, KML", type=[e.strip(".") for e in vectorops.VECTOR_EXT],
+                              accept_multiple_files=True)
+    seen = ctx.__dict__.setdefault("vector_files", set())
+    new_v = {f.name: f.getvalue() for f in vfiles or [] if f.name not in seen}
+    if new_v:
+        try:
+            ctx.__dict__.setdefault("vectors", {}).update(vectorops.read_vector(new_v))
+            seen |= set(new_v)
+        except Exception as e:
+            st.error(f"Vector upload: {e}")
     with brand.container():
         ui.sidebar_brand(__version__, len(ctx.store.rasters), len(ctx.tables), len(ctx.store.outputs))
     if st.button("🧹 Clear session"):
@@ -109,7 +119,7 @@ def download_outputs(where):
         st.download_button(f"⬇️ Download {n}", b, file_name=n, mime="image/tiff", key=f"dl_{where}_{n}")
 
 
-tabs = st.tabs(["📚 Guide", "🛰️ Live map canvas", "🔍 Inspect & geometry", "🛰️ Classification", "🗺️ Area & transitions", "📈 Intensity analysis", "🧩 Landscape & hotspots", "🔮 Drivers & scenarios", "🎯 Accuracy",
+tabs = st.tabs(["📚 Guide", "🛰️ Live map canvas", "🔍 Inspect & geometry", "🧭 Vector tools", "🛰️ Classification", "🗺️ Area & transitions", "📈 Intensity analysis", "🧩 Landscape & hotspots", "🔮 Drivers & scenarios", "🎯 Accuracy",
                 "📏 Area-adjusted accuracy", "⏪ Hindcast", "💧 Hydrology", "🌊 SWAT+ link", "🤖 Agent", "📝 Log"])
 
 # ---------------- Guide ----------------
@@ -153,12 +163,16 @@ with tabs[2]:
             show(res)
         download_outputs("inspect")
 
-# ---------------- Classification ----------------
+# ---------------- Vector tools ----------------
 with tabs[3]:
+    vector_tab.render(ctx, R)
+
+# ---------------- Classification ----------------
+with tabs[4]:
     classify_tab.render(ctx, R)
 
 # ---------------- Area / transitions ----------------
-with tabs[4]:
+with tabs[5]:
     if need(R, "LULC rasters"):
         ui.section("🗺️", "LULC area statistics", "Pixel counts, hectares and shares per class", "pink")
         a = st.selectbox("LULC raster", R, key="area_r")
@@ -192,19 +206,19 @@ with tabs[4]:
             download_outputs("area")
 
 # ---------------- Intensity analysis ----------------
-with tabs[5]:
+with tabs[6]:
     advanced_tabs.render_intensity(ctx, R)
 
 # ---------------- Landscape & hotspots ----------------
-with tabs[6]:
+with tabs[7]:
     pattern_tab.render(ctx, R)
 
 # ---------------- Drivers & scenarios ----------------
-with tabs[7]:
+with tabs[8]:
     simulate_tab.render(ctx, R)
 
 # ---------------- Accuracy ----------------
-with tabs[8]:
+with tabs[9]:
     if need(R, "a classified raster") and need(T, "a validation CSV (columns: x, y, reference class)"):
         ui.section("🎯", "Accuracy assessment", "Confusion matrix, overall / user's / producer's accuracy and kappa", "orange")
         a = st.selectbox("Classified raster", R, key="acc_r")
@@ -226,11 +240,11 @@ with tabs[8]:
                 st.caption(res["warning"])
 
 # ---------------- Area-adjusted accuracy ----------------
-with tabs[9]:
+with tabs[10]:
     advanced_tabs.render_accuracy(ctx, R, T)
 
 # ---------------- Hindcast ----------------
-with tabs[10]:
+with tabs[11]:
     ui.section("⏪", "Hindcast validation", "Kappa, quantity / allocation disagreement and figure of merit", "pink")
     if len(R) < 2:
         st.info("Upload at least two LULC rasters (observed and simulated) in the sidebar to validate a hindcast.")
@@ -254,7 +268,7 @@ with tabs[10]:
         download_outputs("hindcast")
 
 # ---------------- Hydrology ----------------
-with tabs[11]:
+with tabs[12]:
     ui.section("💧", "Hydrological performance", "NSE, PBIAS, R² and KGE from observed vs simulated discharge", "blue")
     if need(T, "observed and simulated discharge CSV files"):
         c = st.columns(2)
@@ -277,11 +291,11 @@ with tabs[11]:
                 st.caption(res["caution"])
 
 # ---------------- SWAT+ link ----------------
-with tabs[12]:
+with tabs[13]:
     swat_tab.render(ctx, R)
 
 # ---------------- Agent ----------------
-with tabs[13]:
+with tabs[14]:
     ui.section("🤖", "Research agent", "Calls the same audited tools as the other tabs and evaluates MOLUSCE / QSWAT+ results you bring from QGIS.", "violet")
     for role, text in st.session_state.chat:
         is_user = role not in ("assistant", "tool", "error")
@@ -307,7 +321,7 @@ with tabs[13]:
         st.rerun()
 
 # ---------------- Log ----------------
-with tabs[14]:
+with tabs[15]:
     ui.section("📝", "Processing log", "Every tool call in the manual's template: date, input, tool version, parameters, output, note", "green")
     df = ctx.log_df()
     st.dataframe(df, hide_index=True)

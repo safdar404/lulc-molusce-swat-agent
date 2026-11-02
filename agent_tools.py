@@ -1,6 +1,6 @@
 """Audited, read-only tools shared by the Streamlit UI and the LLM agent. Nothing touches the file system."""
 import json
-import changeops, classify, hydro, knowledge, patternops, rasterops, simulate, swatlink
+import changeops, classify, hydro, knowledge, patternops, rasterops, simulate, swatlink, vectorops
 
 REG = {}
 S = lambda t, d, **k: dict(type=t, description=d, **k)
@@ -21,7 +21,9 @@ def schemas():
 
 @tool("list_session", "List loaded rasters and tables in this session.", {})
 def list_session(ctx):
-    return dict(rasters=ctx.store.names(), tables={k: list(v.columns) for k, v in ctx.tables.items()}, outputs=list(ctx.store.outputs))
+    return dict(rasters=ctx.store.names(), tables={k: list(v.columns) for k, v in ctx.tables.items()}, outputs=list(ctx.store.outputs),
+                vectors={k: dict(features=int(len(g)), geometry=sorted(g.geom_type.unique().tolist()), fields=[c for c in g.columns if c != "geometry"])
+                         for k, g in ctx.__dict__.get("vectors", {}).items()})
 
 
 @tool("describe_table", "Rows, columns, data types, missing values, numeric statistics and top categories of one uploaded CSV table.",
@@ -402,6 +404,73 @@ def _fe(ctx, observed_table, simulated_table, date_column, observed_column, simu
       ["baseline_table", "scenario_table", "date_column", "baseline_column", "scenario_column"])
 def _at(ctx, baseline_table, scenario_table, date_column, baseline_column, scenario_column):
     return swatlink.lulc_attribution(_table(ctx, baseline_table), _table(ctx, scenario_table), date_column, baseline_column, scenario_column)
+
+
+# ---------------- v1.1.0: vectors ----------------
+def _vec(ctx, name):
+    vs = ctx.__dict__.setdefault("vectors", {})
+    if name not in vs:
+        raise ValueError(f"Vector not loaded: {name}. Loaded: {list(vs)}")
+    return vs[name]
+
+
+@tool("describe_vector", "Features, CRS, geometry types, bounds, fields and attribute summaries of an uploaded vector layer.", {"layer": STR("Vector layer")}, ["layer"])
+def _dv(ctx, layer):
+    return vectorops.describe(_vec(ctx, layer), layer)
+
+
+@tool("rasterize_vector", "Burn a vector layer onto a raster grid (reprojected automatically): a numeric field, a text field (coded 1..n) or a constant 1. The result becomes a "
+      "session layer, e.g. roads/rivers for distance drivers, a protected-area mask, hydrologic soil groups or zones.",
+      {"vector": STR("Vector layer"), "template": STR("Template raster"), "field": STR("Attribute field (omit to burn 1)"),
+       "all_touched": S("boolean", "Burn every touched cell (good for lines)"), "output_name": STR("Output raster name")}, ["vector", "template", "output_name"])
+def _rv(ctx, vector, template, output_name, field=None, all_touched=False):
+    r = ctx.store.get(template)
+    arr, nod, lut = vectorops.rasterize(_vec(ctx, vector), r, field, all_touched=all_touched)
+    vectorops.write_raster(ctx.store, r, arr, nod, output_name)
+    _register(ctx, output_name)
+    return dict(output=output_name, burned_pixels=int((arr != nod).sum()), nodata=nod, code_lookup=lut)
+
+
+@tool("vector_training_samples", "Turn class polygons into training pixels (x, y in the image CRS, class code, polygon_id) saved as a session table; the classifier then also "
+      "reports polygon-grouped cross-validation.",
+      {"vector": STR("Polygon layer"), "template": STR("Image or grid raster"), "class_field": STR("Class field (integer codes or names)"),
+       "max_per_class": S("integer", "Max pixels per class (default 2000)"), "table_name": STR("Table name")}, ["vector", "template", "class_field"])
+def _vts(ctx, vector, template, class_field, max_per_class=2000, table_name=None):
+    df, lut = vectorops.training_from_polygons(_vec(ctx, vector), ctx.store.get(template), class_field, int(max_per_class))
+    name = table_name or f"{vector}_samples.csv"
+    ctx.tables[name] = df
+    return dict(table=name, rows=int(len(df)), polygons=int(df["polygon_id"].nunique()), per_class=df["class"].value_counts().sort_index().to_dict(),
+                code_lookup=lut, note="Use class / x / y in classify_image; polygon_id enables polygon-grouped CV.")
+
+
+@tool("vector_points_to_table", "Convert a point layer (e.g. GPS validation points) into a session table with x, y (in the template raster CRS if given) and all attributes.",
+      {"vector": STR("Point layer"), "template": STR("Raster whose CRS to use"), "table_name": STR("Table name")}, ["vector"])
+def _vpt(ctx, vector, template=None, table_name=None):
+    df = vectorops.points_to_table(_vec(ctx, vector), ctx.store.get(template) if template else None)
+    name = table_name or f"{vector}.csv"
+    ctx.tables[name] = df
+    return dict(table=name, rows=int(len(df)), columns=list(df.columns))
+
+
+@tool("zonal_statistics", "Statistics of a raster within each polygon: for categorical rasters area (ha) and % of each class plus majority class; for continuous rasters "
+      "count, mean, std, min, max, median. Saved as a session table.",
+      {"vector": STR("Zone polygons"), "raster": STR("Raster"), "zone_field": STR("Field with zone names"), "labels": S("object", "Optional {code: name}"),
+       "categorical": S("boolean", "Force categorical / continuous")}, ["vector", "raster"])
+def _zs(ctx, vector, raster, zone_field=None, labels=None, categorical=None):
+    df, cat = vectorops.zonal(_vec(ctx, vector), ctx.store.get(raster), zone_field, categorical, labels)
+    name = f"zonal_{vector}_{raster.rsplit('.', 1)[0]}.csv"
+    ctx.tables[name] = df
+    return dict(table=name, categorical=cat, zones=int(len(df)), preview=df.head(30).round(3).to_dict(orient="records"))
+
+
+@tool("polygonize_raster", "Convert a categorical raster (classified map, hotspot clusters, change map) into polygons kept as a vector layer for download as GeoPackage/GeoJSON.",
+      {"layer": STR("Categorical raster"), "ignore_value": S("integer", "Value to leave out (e.g. 0 = not significant)"), "simplify": S("number", "Simplify tolerance (m)"),
+       "output_name": STR("Vector layer name")}, ["layer"])
+def _pz(ctx, layer, ignore_value=None, simplify=0.0, output_name=None):
+    g = vectorops.polygonize(ctx.store.get(layer), ignore_value, float(simplify or 0))
+    name = output_name or f"{layer.rsplit('.', 1)[0]}_polygons"
+    ctx.__dict__.setdefault("vectors", {})[name] = g
+    return dict(layer=name, features=int(len(g)), values=g["value"].value_counts().sort_index().to_dict())
 
 
 def run_tool(ctx, name, args):

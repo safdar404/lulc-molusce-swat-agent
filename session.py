@@ -7,6 +7,7 @@ from store import Store
 class Session:
     def __init__(self):
         self.store, self.tables, self.log = Store(), {}, []
+        self.vectors = {}  # name -> GeoDataFrame (v1.1.0)
 
     def env(self):
         return f"numpy {np.__version__}; pandas {pd.__version__}; rasterio {rasterio.__version__}"

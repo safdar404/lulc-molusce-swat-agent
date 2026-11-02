@@ -149,7 +149,7 @@ def compute_index_rasters(store, band_map, names, scale=1.0, offset=0.0, prefix=
 
 
 # ---------------------------------------------------------------- training data
-def sample_training(store, spec, table, class_col, x_col, y_col, epsg=None):
+def sample_training(store, spec, table, class_col, x_col, y_col, epsg=None, group_col=None):
     g = _resolve(store, spec["ref"])
     df = table.dropna(subset=[class_col, x_col, y_col]).copy()
     xs, ys = df[x_col].astype(float).to_numpy(), df[y_col].astype(float).to_numpy()
@@ -158,10 +158,13 @@ def sample_training(store, spec, table, class_col, x_col, y_col, epsg=None):
     rows, cols = (np.asarray(v) for v in rowcol(g.transform, xs, ys))
     H, W = spec["shape"]
     ok = (rows >= 0) & (rows < H) & (cols >= 0) & (cols < W)
+    grp = df[group_col].to_numpy() if group_col and group_col in df else None
     rows, cols, xs, ys, y = rows[ok], cols[ok], xs[ok], ys[ok], df[class_col].to_numpy()[ok]
+    grp = grp[ok] if grp is not None else None
     vm = valid_mask(store, spec)
     keep = vm[rows, cols]
     rows, cols, xs, ys, y = rows[keep], cols[keep], xs[keep], ys[keep], y[keep]
+    grp = grp[keep] if grp is not None else None
     X = np.empty((rows.size, len(spec["names"])), "float32")
     order = np.argsort(rows)
     # read features in row chunks to limit memory
@@ -179,7 +182,10 @@ def sample_training(store, spec, table, class_col, x_col, y_col, epsg=None):
     # dedupe points falling in the same pixel (keeps CV honest)
     pix = pd.Series(rows[fin] * W + cols[fin])
     first = ~pix.duplicated().to_numpy()
-    return X[fin][first], y[fin][first], xs[fin][first], ys[fin][first], dropped + int((~first).sum())
+    out = (X[fin][first], y[fin][first], xs[fin][first], ys[fin][first], dropped + int((~first).sum()))
+    if group_col:
+        return out + ((grp[fin][first] if grp is not None else None),)
+    return out
 
 
 # ---------------------------------------------------------------- models
@@ -216,7 +222,7 @@ def _scores(y, p, classes):
                 confusion_matrix_rows_reference_cols_predicted=mat.tolist())
 
 
-def cross_validate(model_name, X, y, xs, ys, block_m=1000.0, folds=5, seed=42, n_trees=300):
+def cross_validate(model_name, X, y, xs, ys, block_m=1000.0, folds=5, seed=42, n_trees=300, polygon_groups=None):
     from sklearn.base import clone
     from sklearn.model_selection import GroupKFold, StratifiedKFold
     base = make_model(model_name, seed, n_trees)
@@ -239,6 +245,15 @@ def cross_validate(model_name, X, y, xs, ys, block_m=1000.0, folds=5, seed=42, n
                 continue
             pred[te] = clone(base).fit(X[tr], y[tr]).predict(X[te])
         out["spatial_block_kfold"] = dict(folds=ks, block_m=float(block_m), blocks=ng, **_scores(y, pred, None))
+    if polygon_groups is not None and len(np.unique(polygon_groups)) >= 2:
+        kp = int(min(folds, len(np.unique(polygon_groups))))
+        pred = np.empty_like(y)
+        for tr, te in GroupKFold(kp).split(X, y, polygon_groups):
+            if len(np.unique(y[tr])) < 2:
+                pred[te] = y[tr][0]
+                continue
+            pred[te] = clone(base).fit(X[tr], y[tr]).predict(X[te])
+        out["polygon_group_kfold"] = dict(folds=kp, polygons=int(len(np.unique(polygon_groups))), **_scores(y, pred, None))
     if "random_kfold" in out and "spatial_block_kfold" in out:
         out["optimism_gap_oa"] = out["random_kfold"]["overall_accuracy"] - out["spatial_block_kfold"]["overall_accuracy"]
     return out
@@ -357,7 +372,8 @@ def train_and_predict(store, models_cache, table, class_col, x_col, y_col, band_
         bm, s0, o0 = preset_band_map(store, stack, preset)
         band_map = {**bm, **(band_map or {})}
     spec = build_spec(store, band_map or {}, extra_layers, indices, texture, s0 if scale is None else scale, o0 if offset is None else offset)
-    X, y, xs, ys, dropped = sample_training(store, spec, table, class_col, x_col, y_col, epsg)
+    gcol = "polygon_id" if "polygon_id" in table.columns else None
+    X, y, xs, ys, dropped, groups = sample_training(store, spec, table, class_col, x_col, y_col, epsg, group_col=gcol or "__none__")
     counts = pd.Series(y).value_counts().sort_index()
     if len(counts) < 2:
         raise ValueError("Training data need at least two classes inside the image.")
@@ -368,7 +384,7 @@ def train_and_predict(store, models_cache, table, class_col, x_col, y_col, band_
         warnings.append(f"Classes {counts[counts < 30].index.tolist()} have < 30 training pixels; results for them are unreliable.")
     if counts.max() / counts.min() > 10:
         warnings.append("Training classes are strongly imbalanced (>10:1); class-balanced weighting is used but check user's accuracy of rare classes.")
-    cv = cross_validate(model, X, y, xs, ys, block_m, folds, seed, n_trees)
+    cv = cross_validate(model, X, y, xs, ys, block_m, folds, seed, n_trees, polygon_groups=groups)
     final = make_model(model, seed, n_trees).fit(X, y)
     key = output_name.rsplit(".", 1)[0]
     models_cache[key] = dict(model=final, spec=spec, model_name=model)
