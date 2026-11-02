@@ -1,4 +1,21 @@
 # Changelog
+## 0.6.0
+- New **📏 Area-adjusted accuracy** tab (`olofsson.py`): Olofsson et al. (2014) good-practice estimators. Area-weighted error matrix,
+  overall / user's / producer's accuracy with 95% CI, error-adjusted class areas with 95% CI (chart shows where pixel counts are biased),
+  quantity / allocation disagreement (Pontius & Millones 2011) split into exchange and shift (Pontius & Santacruz 2014), F1 per class,
+  ready-to-paste methods paragraph and Excel export. Works from a raster + validation CSV or from a published error matrix.
+  Validated against the paper's worked example (OA 94.7 ± 1.8 %, deforestation 21,158 ± 6,158 ha).
+- **Sample design**: total sample size for a target SE (Olofsson Eq. 13), four allocation rules, and stratified random point
+  generation saved as a session table with a blind interpretation sheet.
+- New **📈 Intensity analysis** tab (`intensity.py`): Aldwaik & Pontius (2012) interval (fast/slow), category (active/dormant
+  gain and loss) and transition (targeted/avoided) levels for any number of dates, stationarity across intervals, gross gain / loss /
+  net / swap and alternation (Pontius et al. 2017), with charts, transition matrices, methods text and Excel export.
+- New change maps (`changeops.py`): change-frequency raster and per-category trajectory raster (stable, gain/loss with or without
+  alternation) with areas. Class areas are exact for projected rasters and spherical for lat/lon rasters.
+- Agent: six new tools (`area_adjusted_accuracy`, `design_accuracy_sample`, `generate_sample_points`, `intensity_analysis`,
+  `change_frequency_raster`, `trajectory_raster`) and rules to report error-adjusted areas and run intensity analysis after accuracy checks.
+- Fix: the app crashed (duplicate element key) once an output GeoTIFF existed and 2+ rasters were loaded, because the same download
+  buttons were drawn in several tabs.
 ## 0.5.0
 - New **🛰️ Live map canvas** tab. A real-time processing monitor runs the analysis strip by strip at full resolution and draws
   the result on a canvas as it is computed, with a progress bar, live metrics, running class areas and a console log.

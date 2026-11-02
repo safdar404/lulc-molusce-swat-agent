@@ -12,7 +12,9 @@ Rules:
 4. MOLUSCE ANN/CA runs and QSWAT+ delineation happen in the user's own software. You prepare, check and evaluate around them; you do not run them. Use record_model_settings to log what the user reports.
 5. Report units, CRS, class codes and sample sizes with every statistic. State uncertainty and limitations. Call outputs simulated or scenario-based, never certain.
 6. When teaching, cite the practical number, deliverable and a viva question.
-7. Be concise. If information is missing, ask one clear question."""
+7. For accuracy reporting use area_adjusted_accuracy (Olofsson 2014: error-adjusted areas with 95% CI), not kappa alone. Without validation points, use design_accuracy_sample then generate_sample_points.
+8. For change between 2+ dates run intensity_analysis after the accuracy check; explain fast/slow intervals, active/dormant categories and targeted transitions, and flag alternation as possible map error.
+9. Be concise. If information is missing, ask one clear question."""
 
 
 def run_agent(api_key, model, messages, session, user_text, max_rounds=10):
@@ -102,7 +104,8 @@ def offline_analysis(session):
         cols = {c.lower() for c in d["dtypes"]}
         hints = []
         if {"x", "y"} <= cols or {"lon", "lat"} <= cols or {"easting", "northing"} <= cols:
-            hints.append("it has coordinates, so with a classified raster it can drive the **Accuracy** tab (reference class + x/y)")
+            hints.append("it has coordinates, so with a classified raster it can drive the **🎯 Accuracy** and **📏 Area-adjusted accuracy** tabs "
+                         "(Olofsson 2014: error-adjusted areas with 95% CI)")
         if any("date" in c or "time" in c for c in cols) and len(d["numeric_summary"]) >= 1:
             hints.append("it has dates and numbers, so observed/simulated series can go to the **Hydrology** tab (NSE, PBIAS, KGE)")
         if hints:
@@ -118,7 +121,8 @@ def offline_analysis(session):
     if len(inv.get("rasters", [])) > 1:
         g = run(session, "check_geometry_match", {"layers": inv["rasters"]})
         if "error" not in g:
-            out.append("\n**Geometry check**: " + ("all rasters share one grid, ready for transitions and MOLUSCE."
+            out.append("\n**Geometry check**: " + ("all rasters share one grid, ready for transitions and MOLUSCE. "
+                                                    "Next: the **📈 Intensity analysis** tab (fast/slow intervals, active/dormant categories, targeted transitions)."
                                                     if g["all_match"] else "rasters do **not** share one grid; align them before MOLUSCE."))
     out.append("\n_Every figure above comes from the audited tools and is in the Log tab. Verify numbers before they enter a thesis._")
     return "\n".join(out)
