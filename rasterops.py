@@ -21,7 +21,8 @@ def inspect(store, name):
     r = store.get(name)
     t, v = r.transform, r.data[~r.mask]
     out = dict(layer=name, crs=r.crs.to_string() if r.crs else None, size_cols_rows=[r.data.shape[1], r.data.shape[0]],
-               pixel_size=[t.a, t.e], origin=[t.c, t.f], nodata=r.nodata, dtype=str(r.data.dtype), valid_pixels=int(v.size))
+               pixel_size=[t.a, t.e], origin=[t.c, t.f], nodata=r.nodata, dtype=str(r.data.dtype), valid_pixels=int(v.size),
+               bands=1 if r.bands is None else int(r.bands.shape[0]))
     if v.size:
         out.update(min=float(v.min()), max=float(v.max()))
         u = np.unique(v)

@@ -1,6 +1,6 @@
 """Audited, read-only tools shared by the Streamlit UI and the LLM agent. Nothing touches the file system."""
 import json
-import changeops, hydro, knowledge, patternops, rasterops
+import changeops, classify, hydro, knowledge, patternops, rasterops
 
 REG = {}
 S = lambda t, d, **k: dict(type=t, description=d, **k)
@@ -214,6 +214,75 @@ def _hs(ctx, layer, variable="value", second_layer=None, class_code=None, block=
         permutations=199, output_prefix="hotspot"):
     return patternops.hotspot_analysis(ctx.store, layer, variable, second_layer, class_code, block, radius, kernel_shape, method, fdr,
                                        permutations, output_prefix)
+
+
+# ---------------- v0.8.0: spectral indices and classification ----------------
+BANDMAP = S("object", "Band roles -> raster, e.g. {\"red\": \"s2.tif#3\", \"nir\": \"s2.tif#7\"}. Roles: " + ", ".join(classify.ROLES) +
+            ". Use 'file.tif#k' for band k of a multi-band file, or a single-band file name.")
+PRESET = S("string", "Sensor preset that fills band_map from a multi-band 'stack'", enum=list(classify.PRESETS))
+INDEX_LIST = S("array", "Spectral indices: " + ", ".join(classify.INDICES), items={"type": "string"})
+
+
+def _register(ctx, *names):
+    for n in names:
+        if n and n in ctx.store.outputs:
+            ctx.store.add(n, ctx.store.outputs[n])  # make generated maps selectable as session layers
+
+
+def _bands(ctx, band_map, stack, preset, scale, offset):
+    s0, o0 = (1.0, 0.0)
+    if stack and preset:
+        bm, s0, o0 = classify.preset_band_map(ctx.store, stack, preset)
+        band_map = {**bm, **(band_map or {})}
+    return band_map or {}, (s0 if scale is None else scale), (o0 if offset is None else offset)
+
+
+@tool("spectral_indices", "Compute spectral index GeoTIFFs (" + ", ".join(classify.INDICES) + ") from mapped bands with reflectance scaling; outputs become session layers.",
+      {"band_map": BANDMAP, "stack": STR("Multi-band file (with preset)"), "preset": PRESET, "indices": INDEX_LIST,
+       "scale": S("number", "Reflectance = DN*scale+offset"), "offset": S("number", "Offset"), "prefix": STR("Output name prefix")}, ["indices"])
+def _si(ctx, indices, band_map=None, stack=None, preset=None, scale=None, offset=None, prefix=""):
+    bm, sc, of = _bands(ctx, band_map, stack, preset, scale, offset)
+    res = classify.compute_index_rasters(ctx.store, bm, indices, sc, of, prefix)
+    _register(ctx, *[r["output"] for r in res["indices"]])
+    return res
+
+
+@tool("classify_image", "Supervised LULC classification: samples features (bands, indices, texture, extra layers) at training points, cross-validates with random "
+      "AND spatial-block k-fold, reports accuracy, per-class F1 and permutation importance, then maps the whole image with a confidence raster. The map becomes a "
+      "session layer usable by the accuracy, change and landscape tools.",
+      {"table": STR("Training table"), "class_column": STR("Integer class column"), "x_column": STR("X/lon"), "y_column": STR("Y/lat"),
+       "epsg": S("integer", "EPSG of points if different from image"), "band_map": BANDMAP, "stack": STR("Multi-band file (with preset)"), "preset": PRESET,
+       "extra_layers": S("array", "Extra single-band layers (DEM, SAR)", items={"type": "string"}), "indices": INDEX_LIST,
+       "texture": S("boolean", "Add 5x5 standard deviation texture"), "scale": S("number", "Reflectance scale"), "offset": S("number", "Reflectance offset"),
+       "model": S("string", "Classifier", enum=classify.MODELS), "n_trees": S("integer", "Trees / iterations (default 150)"),
+       "block_m": S("number", "Spatial CV block size in metres (default 1000)"), "folds": S("integer", "CV folds (default 5)"),
+       "smooth": S("integer", "Majority filter window 0/3/5/7"), "output_name": STR("Output map name"), "labels": S("object", "Optional {code: name}"),
+       "predict": S("boolean", "Map the whole image (default true)")},
+      ["table", "class_column", "x_column", "y_column"])
+def _cl(ctx, table, class_column, x_column, y_column, epsg=None, band_map=None, stack=None, preset=None, extra_layers=(), indices=("NDVI",), texture=False,
+        scale=None, offset=None, model="Random Forest", n_trees=150, block_m=1000.0, folds=5, smooth=0, output_name="classified.tif", labels=None, predict=True):
+    if table not in ctx.tables:
+        raise ValueError(f"Table not loaded: {table}")
+    bm, sc, of = _bands(ctx, band_map, stack, preset, scale, offset)
+    res = classify.train_and_predict(ctx.store, ctx.__dict__.setdefault("models", {}), ctx.tables[table], class_column, x_column, y_column,
+                                     band_map=bm, extra_layers=list(extra_layers or ()), indices=list(indices or ()), texture=texture, scale=sc,
+                                     offset=of, model=model, n_trees=n_trees, block_m=block_m, folds=folds, epsg=epsg, predict=predict,
+                                     output_name=output_name, smooth=smooth, labels=labels)
+    if res.get("prediction"):
+        _register(ctx, res["prediction"]["output"], res["prediction"].get("confidence_output"))
+    return res
+
+
+@tool("cluster_image", "Unsupervised K-means clustering of the feature stack (exploration only; clusters must be labelled by the user).",
+      {"band_map": BANDMAP, "stack": STR("Multi-band file (with preset)"), "preset": PRESET, "extra_layers": S("array", "Extra layers", items={"type": "string"}),
+       "indices": INDEX_LIST, "texture": S("boolean", "Add texture"), "scale": S("number", "Scale"), "offset": S("number", "Offset"),
+       "k": S("integer", "Number of clusters"), "output_name": STR("Output name")}, ["k"])
+def _km(ctx, k, band_map=None, stack=None, preset=None, extra_layers=(), indices=(), texture=False, scale=None, offset=None, output_name="kmeans_clusters.tif"):
+    bm, sc, of = _bands(ctx, band_map, stack, preset, scale, offset)
+    spec = classify.build_spec(ctx.store, bm, list(extra_layers or ()), list(indices or ()), texture, sc, of)
+    res = classify.kmeans(ctx.store, spec, k, output_name)
+    _register(ctx, output_name)
+    return res
 
 
 def run_tool(ctx, name, args):

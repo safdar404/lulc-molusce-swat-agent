@@ -1,4 +1,19 @@
 # Changelog
+## 0.8.0
+- New **🛰️ Classification** tab (`classify.py`, `classify_tab.py`): the app now produces LULC maps, not only evaluates them.
+  - **Multi-band GeoTIFFs** are read in full; each band is addressable as `file.tif#k` in every tool and tab (e.g. RGB composites from a stack).
+  - **Sensor presets** with band order and reflectance scaling: Sentinel-2 L2A (10 or 4 bands), Landsat 8/9 and 4/5/7 Collection 2 L2, or custom.
+  - **15 spectral indices** with references: NDVI, EVI, SAVI, MSAVI, GNDVI, NDWI, MNDWI, AWEIsh, NDMI, NBR, NDBI, UI, BSI, NDRE, CIre.
+    Index maps are written as GeoTIFFs and added to the session layers.
+  - **Feature stacks**: bands + indices + 5×5 texture + extra layers (DEM, slope, SAR).
+  - **Classifiers**: Random Forest, Extra Trees, histogram gradient boosting (XGBoost-style), SVM (RBF), Gaussian maximum likelihood,
+    plus K-means clustering. Class-balanced weighting.
+  - **Validation**: random stratified k-fold *and* spatial block k-fold side by side, with the optimism gap, per-class producer's / user's
+    accuracy and F1, confusion matrix and permutation feature importance. Duplicate points in one pixel are removed.
+  - **Mapping** in row chunks (memory-safe), a confidence raster (max class probability), optional majority filter, class areas.
+    Maps are added to the session layers so they flow into Accuracy, Area-adjusted accuracy, Intensity, Landscape and the Live canvas.
+- Agent: new tools `spectral_indices`, `classify_image`, `cluster_image`; `inspect_raster` reports band count.
+- New dependency: `scikit-learn`.
 ## 0.7.0
 - New **🧩 Landscape & hotspots** tab.
 - **Landscape metrics** (`landscape.py`) with FRAGSTATS definitions, for one or several dates. Class level: CA, PLAND, NP, PD, LPI, TE, ED,
