@@ -1,6 +1,6 @@
 """Vector support (v1.1.0): read, describe, rasterize, sample, zonal statistics and polygonize.
 
-Formats: zipped shapefile (any folder depth), shapefile parts uploaded together (.shp .shx .dbf .prj), GeoPackage, GeoJSON, KML, FlatGeobuf.
+Formats: zipped shapefile (any folder depth), shapefile parts uploaded together (.shp .shx .dbf .prj), GeoPackage, GeoJSON, KML, KMZ, FlatGeobuf.
 Archives and shapefile parts are unpacked into a private temporary folder that is deleted immediately after reading.
 Every operation reprojects the vector to the raster's CRS, so vectors in WGS84 and rasters in UTM work together.
 """
@@ -17,7 +17,7 @@ from rasterio.transform import xy
 
 from store import to_geotiff_bytes
 
-VECTOR_EXT = (".zip", ".gpkg", ".geojson", ".json", ".kml", ".fgb", ".shp", ".shx", ".dbf", ".prj", ".cpg")
+VECTOR_EXT = (".zip", ".kmz", ".gpkg", ".geojson", ".json", ".kml", ".fgb", ".shp", ".shx", ".dbf", ".prj", ".cpg")
 _READABLE = (".shp", ".gpkg", ".geojson", ".json", ".kml", ".fgb")
 
 
@@ -36,7 +36,7 @@ def read_vector(files):
     for name, raw in files.items():
         ext = os.path.splitext(name)[1].lower()
         stem = os.path.splitext(name)[0]
-        if ext == ".zip":
+        if ext in (".zip", ".kmz"):  # a KMZ is a zip holding doc.kml (Google Earth / ArcGIS "Layer To KML")
             with tempfile.TemporaryDirectory() as d:
                 with zipfile.ZipFile(io.BytesIO(raw)) as z:
                     for m in z.namelist():
@@ -69,8 +69,35 @@ def read_vector(files):
             raise ValueError(f"{k} has no coordinate reference system (.prj missing); add one in QGIS and upload again.")
         g = g[g.geometry.notna() & ~g.geometry.is_empty].copy()
         g["geometry"] = g.geometry.make_valid()
+        if g.geom_type.str.contains("Polygon").any():  # KML exports often add empty or degenerate polygons
+            g = g[~(g.geom_type.str.contains("Polygon") & (g.to_crs(g.estimate_utm_crs()).area < 1.0))].copy()
+        g = _kml_attributes(g)
         out[k] = g
     return out
+
+
+def _kml_attributes(g):
+    """ArcGIS 'Layer To KML' stores attributes as an HTML table in 'description': turn <td>key</td><td>value</td> pairs into columns."""
+    import re
+    if "description" not in g.columns:
+        return g
+    rows = []
+    for d in g["description"].fillna("").astype(str):
+        rec = {}
+        for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", d, flags=re.S | re.I):   # rows with exactly two cells are key / value pairs
+            cells = [re.sub(r"<[^>]+>", "", c).strip() for c in re.findall(r"<td[^>]*>(.*?)</td>", tr, flags=re.S | re.I)]
+            if len(cells) == 2 and cells[0]:
+                rec[cells[0]] = cells[1]
+        rows.append(rec)
+    attrs = pd.DataFrame(rows, index=g.index)
+    attrs = attrs[[c for c in attrs.columns if c and c not in g.columns and attrs[c].astype(str).str.len().max() < 200]].iloc[:, :40]
+    for c in attrs.columns:
+        num = pd.to_numeric(attrs[c], errors="coerce")
+        if num.notna().sum() == attrs[c].replace("", np.nan).notna().sum() and num.notna().any():
+            attrs[c] = num
+    keep = [c for c in g.columns if c not in ("description", "timestamp", "begin", "end", "altitudeMode", "tessellate", "extrude", "visibility",
+                                               "drawOrder", "icon", "snippet")]
+    return pd.concat([g[keep], attrs], axis=1)
 
 
 def describe(g, name):

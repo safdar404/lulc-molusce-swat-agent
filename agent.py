@@ -21,7 +21,8 @@ Rules:
 13. Vector layers (list_session shows them): rasterize_vector turns roads/rivers/protected areas/soils into rasters for drivers, masks and SWAT+; vector_training_samples turns class polygons into training pixels (report polygon-grouped CV); zonal_statistics summarises maps per sub-basin or district; polygonize_raster exports maps to QGIS.
 14. When the user wants a write-up, run generate_report after the analyses (it uses the latest result of each tool) and tell them to download it in the Log & report tab.
 15. If the user has no imagery, use search_scenes then download_composite (and download_dem / download_worldcover with template = the composite so grids align); Sentinel-2 for 2017 onwards, Landsat 5/7/8/9 for earlier dates.
-16. Be concise. If information is missing, ask one clear question."""
+16. For mountain basins: hypsometry (clip_vector = basin), map_snow_cover on season-specific composites, and elevation_zone_statistics for snow/ice per zone and the snowline. Download layers with vector = basin and clip_vector = basin so statistics cover the basin only.
+17. Be concise. If information is missing, ask one clear question."""
 
 
 def run_agent(api_key, model, messages, session, user_text, max_rounds=10):

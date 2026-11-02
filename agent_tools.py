@@ -1,6 +1,6 @@
 """Audited, read-only tools shared by the Streamlit UI and the LLM agent. Nothing touches the file system."""
 import json
-import changeops, classify, hydro, imagery, knowledge, patternops, rasterops, report, simulate, swatlink, vectorops
+import changeops, classify, cryo, hydro, imagery, knowledge, patternops, rasterops, report, simulate, swatlink, vectorops
 
 REG = {}
 S = lambda t, d, **k: dict(type=t, description=d, **k)
@@ -489,14 +489,18 @@ def _rep(ctx, title="Land-cover change, simulation and hydrological response", a
 # ---------------- v1.3.0: imagery download ----------------
 AOI = {"bbox": S("array", "Area of interest [west, south, east, north] in degrees", items={"type": "number"}),
        "center_lon": S("number", "Centre longitude (with center_lat and size_km instead of bbox)"), "center_lat": S("number", "Centre latitude"),
-       "size_km": S("number", "Width = height of the area (km)"), "template": STR("Reuse the grid (CRS, pixels, extent) of this loaded raster")}
+       "size_km": S("number", "Width = height of the area (km)"), "template": STR("Reuse the grid (CRS, pixels, extent) of this loaded raster"),
+       "vector": STR("Use the extent of this vector layer (e.g. the basin boundary)"),
+       "clip_vector": STR("Set pixels outside this polygon layer to no data (e.g. the basin)")}
 
 
 def _client(ctx):
     return ctx.__dict__.setdefault("img_client", imagery.Client())
 
 
-def _bbox(bbox=None, center_lon=None, center_lat=None, size_km=None, template=None):
+def _bbox(bbox=None, center_lon=None, center_lat=None, size_km=None, template=None, vector=None, ctx=None):
+    if vector:
+        return imagery.vector_bbox(_vec(ctx, vector))
     if bbox:
         return tuple(float(v) for v in bbox)
     if center_lon is not None and center_lat is not None:
@@ -510,8 +514,9 @@ def _bbox(bbox=None, center_lon=None, center_lat=None, size_km=None, template=No
       {**AOI, "product": S("string", "Sensor", enum=list(imagery.PRODUCTS)), "start": STR("YYYY-MM-DD"), "end": STR("YYYY-MM-DD"),
        "max_cloud": S("number", "Max scene cloud % (default 30)"), "platforms": S("array", "Landsat platforms, e.g. landsat-8", items={"type": "string"})},
       ["product", "start", "end"])
-def _ss(ctx, product, start, end, max_cloud=30, platforms=None, bbox=None, center_lon=None, center_lat=None, size_km=None, template=None):
-    b = _bbox(bbox, center_lon, center_lat, size_km, template)
+def _ss(ctx, product, start, end, max_cloud=30, platforms=None, bbox=None, center_lon=None, center_lat=None, size_km=None, template=None, vector=None,
+        clip_vector=None):
+    b = _bbox(bbox, center_lon, center_lat, size_km, template, vector, ctx)
     if b is None:
         t = ctx.store.get(template)
         b = imagery.grid_bbox_lonlat(t.crs, t.transform, t.data.shape)
@@ -526,27 +531,64 @@ def _ss(ctx, product, start, end, max_cloud=30, platforms=None, bbox=None, cente
        "resolution": S("number", "Pixel size in metres"), "platforms": S("array", "Landsat platforms", items={"type": "string"}), "output_name": STR("Output name")},
       ["product", "start", "end"])
 def _dc(ctx, product, start, end, max_cloud=30, n_scenes=6, resolution=None, platforms=None, output_name=None, bbox=None, center_lon=None, center_lat=None,
-        size_km=None, template=None):
-    res = imagery.download_composite(ctx.store, _client(ctx), product, _bbox(bbox, center_lon, center_lat, size_km, template), start, end, max_cloud,
-                                     n_scenes, resolution, template, output_name, platforms=platforms)
+        size_km=None, template=None, vector=None, clip_vector=None):
+    res = imagery.download_composite(ctx.store, _client(ctx), product, _bbox(bbox, center_lon, center_lat, size_km, template, vector, ctx), start, end, max_cloud,
+                                     n_scenes, resolution, template, output_name, platforms=platforms, clip=_vec(ctx, clip_vector) if clip_vector else None)
     _register(ctx, res["output"], res["observation_count"])
     return res
 
 
 @tool("download_dem", "Download the Copernicus DEM GLO-30 for an area (or on the grid of a loaded raster) as a session layer.",
       {**AOI, "resolution": S("number", "Pixel size in metres (default 30)"), "output_name": STR("Output name")})
-def _dd(ctx, resolution=30, output_name="copernicus_dem_30m.tif", bbox=None, center_lon=None, center_lat=None, size_km=None, template=None):
-    res = imagery.download_dem(ctx.store, _client(ctx), _bbox(bbox, center_lon, center_lat, size_km, template), template, resolution, output_name)
+def _dd(ctx, resolution=30, output_name="copernicus_dem_30m.tif", bbox=None, center_lon=None, center_lat=None, size_km=None, template=None, vector=None,
+        clip_vector=None):
+    res = imagery.download_dem(ctx.store, _client(ctx), _bbox(bbox, center_lon, center_lat, size_km, template, vector, ctx), template, resolution, output_name,
+                               clip=_vec(ctx, clip_vector) if clip_vector else None)
     _register(ctx, res["output"])
     return res
 
 
 @tool("download_worldcover", "Download ESA WorldCover 10 m land cover (2020 or 2021) for an area (or on the grid of a loaded raster) as a session layer, with class names.",
       {**AOI, "year": S("integer", "2020 or 2021"), "resolution": S("number", "Pixel size in metres (default 10)"), "output_name": STR("Output name")})
-def _dw(ctx, year=2021, resolution=10, output_name=None, bbox=None, center_lon=None, center_lat=None, size_km=None, template=None):
-    res = imagery.download_worldcover(ctx.store, _client(ctx), _bbox(bbox, center_lon, center_lat, size_km, template), template, resolution, year, output_name)
+def _dw(ctx, year=2021, resolution=10, output_name=None, bbox=None, center_lon=None, center_lat=None, size_km=None, template=None, vector=None,
+        clip_vector=None):
+    res = imagery.download_worldcover(ctx.store, _client(ctx), _bbox(bbox, center_lon, center_lat, size_km, template, vector, ctx), template, resolution, year,
+                                      output_name, clip=_vec(ctx, clip_vector) if clip_vector else None)
     _register(ctx, res["output"])
     return res
+
+
+# ---------------- v1.4.0: snow, ice and elevation zones ----------------
+ZONES = S("array", "Optional zone limits in metres, e.g. [2500, 3500, 4500, 5500]", items={"type": "number"})
+CLIP = STR("Basin polygon layer to clip to")
+
+
+@tool("hypsometry", "Hypsometry of a basin from a DEM: area per elevation band (or custom zones), cumulative curve, elevation range, mean, percentiles and "
+      "hypsometric integral, optionally clipped to the basin polygon.",
+      {"dem": STR("DEM raster"), "band_m": S("number", "Band width in metres (default 500)"), "zones": ZONES, "clip_vector": CLIP}, ["dem"])
+def _hy(ctx, dem, band_m=500.0, zones=None, clip_vector=None):
+    return cryo.hypsometry(ctx.store, dem, band_m, zones, _vec(ctx, clip_vector) if clip_vector else None)
+
+
+@tool("map_snow_cover", "Map snow and ice from a composite with NDSI (> 0.4) and NIR (> 0.11) tests, optional water mask and basin clip; writes a snow/ice map "
+      "(1 snow/ice, 2 snow-free) and an NDSI raster as session layers.",
+      {"stack": STR("Multi-band composite"), "preset": PRESET, "band_map": BANDMAP, "scale": S("number", "Reflectance scale"), "offset": S("number", "Offset"),
+       "ndsi_threshold": S("number", "Default 0.4"), "nir_threshold": S("number", "Default 0.11"), "water_layer": STR("WorldCover layer on the same grid"),
+       "clip_vector": CLIP, "output_name": STR("Output name")})
+def _sn(ctx, stack=None, preset=None, band_map=None, scale=None, offset=None, ndsi_threshold=0.4, nir_threshold=0.11, water_layer=None, clip_vector=None,
+        output_name="snow_ice.tif"):
+    bm, sc, of = _bands(ctx, band_map, stack, preset, scale, offset)
+    res = cryo.snow_map(ctx.store, bm, sc, of, ndsi_threshold, nir_threshold, water_layer, (80,), _vec(ctx, clip_vector) if clip_vector else None, output_name)
+    _register(ctx, res["output"], res["ndsi_output"])
+    return res
+
+
+@tool("elevation_zone_statistics", "Area and share of each class of a map (snow/ice, glaciers, land cover) per elevation band or zone, plus the elevation where a "
+      "focus class reaches 50 % of a band (snowline).",
+      {"dem": STR("DEM on the map's grid"), "layer": STR("Categorical map"), "band_m": S("number", "Band width (default 500)"), "zones": ZONES, "clip_vector": CLIP,
+       "labels": S("object", "{code: name}"), "focus_class": S("integer", "Class code for the 50 % line, e.g. 1 = snow/ice")}, ["dem", "layer"])
+def _zst(ctx, dem, layer, band_m=500.0, zones=None, clip_vector=None, labels=None, focus_class=None):
+    return cryo.zone_statistics(ctx.store, dem, layer, band_m, zones, _vec(ctx, clip_vector) if clip_vector else None, labels, focus_class)
 
 
 def run_tool(ctx, name, args):

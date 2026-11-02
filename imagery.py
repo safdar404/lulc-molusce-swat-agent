@@ -26,7 +26,7 @@ from rasterio.warp import transform_bounds
 
 STAC = "https://planetarycomputer.microsoft.com/api/stac/v1"
 SAS = "https://planetarycomputer.microsoft.com/api/sas/v1/token/{}"
-MAX_PIXELS = 4_000_000          # per band on the target grid (memory guard for 1 GB hosts)
+MAX_PIXELS = 9_000_000          # per band on the target grid (about 90 x 90 km at 30 m; memory guard for small cloud hosts)
 GDAL_ENV = dict(GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR", CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".tif,.TIF,.tiff", GDAL_HTTP_MULTIRANGE="YES",
                 GDAL_HTTP_MERGE_CONSECUTIVE_RANGES="YES", GDAL_HTTP_MAX_RETRY="3", GDAL_HTTP_RETRY_DELAY="1", VSI_CACHE="TRUE")
 
@@ -109,6 +109,20 @@ def target_grid(bbox, res, template=None):
     x0, y1 = math.floor(x0 / res) * res, math.ceil(y1 / res) * res
     cols, rows = int(math.ceil((x1 - x0) / res)), int(math.ceil((y1 - y0) / res))
     return crs, from_origin(x0, y1, res, res), (rows, cols)
+
+
+def clip_mask(gdf, crs, transform, shape):
+    """True inside the polygons of gdf on the target grid (None -> all True)."""
+    if gdf is None:
+        return np.ones(shape, bool)
+    from rasterio import features
+    g = gdf.to_crs(crs)
+    return features.geometry_mask([x for x in g.geometry if x is not None and not x.is_empty], out_shape=shape, transform=transform, invert=True)
+
+
+def vector_bbox(gdf, pad_deg=0.002):
+    b = gdf.to_crs(4326).total_bounds
+    return (float(b[0]) - pad_deg, float(b[1]) - pad_deg, float(b[2]) + pad_deg, float(b[3]) + pad_deg)
 
 
 def grid_bbox_lonlat(crs, transform, shape):
@@ -203,7 +217,9 @@ def composite(client, product, items, crs, transform, shape, progress=None, stat
             step += 1
             if progress:
                 progress(min(step / n_steps, 1.0), f"{band} · {it['id']}")
-        with np.errstate(all="ignore"):
+        import warnings
+        with np.errstate(all="ignore"), warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)   # pixels never clear (or outside the footprint) stay NaN
             agg = np.nanmedian(stack, axis=0) if statistic == "median" else np.nanmean(stack, axis=0)
         cube[b] = np.where(np.isfinite(agg), np.clip(np.round(agg * 10000), 1, 65534), 0).astype("uint16")
     return cube, count, [it["id"] for it in used]
@@ -244,7 +260,7 @@ def single_asset(client, collection, asset, bbox, crs, transform, shape, resampl
 
 
 def download_composite(store, client, product, bbox=None, start=None, end=None, max_cloud=30, n_scenes=6, res=None, template=None,
-                       output_name=None, progress=None, statistic="median", platforms=None):
+                       output_name=None, progress=None, statistic="median", platforms=None, clip=None):
     p = PRODUCTS[product]
     tpl = store.get(template) if template else None
     if tpl is not None:
@@ -257,43 +273,49 @@ def download_composite(store, client, product, bbox=None, start=None, end=None, 
         raise ValueError("No scenes found: widen the dates, raise the cloud limit or check the area.")
     sel = items[: int(n_scenes)]
     cube, count, used = composite(client, product, sel, crs, transform, shape, progress, statistic)
+    inside = clip_mask(clip, crs, transform, shape)
+    cube[:, ~inside] = 0
+    count = np.where(inside, count, 255).astype("uint8")
     name = output_name or f"{'S2' if product.startswith('Sentinel') else 'Landsat'}_{start[:4]}_{end[:4]}_composite.tif"
     store.outputs[name] = stack_bytes(cube, crs, transform, p["names"])
     cname = name.rsplit(".", 1)[0] + "_obs_count.tif"
     store.outputs[cname] = stack_bytes(count[None], crs, transform, ["valid observations"], nodata=255)
-    covered = count > 0
-    return dict(output=name, observation_count=cname, product=product, preset=p["preset"], crs=crs.to_string(), resolution_m=abs(transform.a),
+    covered = (count > 0) & inside
+    return dict(output=name, clipped=clip is not None, area_km2=float(inside.sum() * abs(transform.a * transform.e) / 1e6), observation_count=cname, product=product, preset=p["preset"], crs=crs.to_string(), resolution_m=abs(transform.a),
                 size=[int(shape[1]), int(shape[0])], bbox_lonlat=[round(v, 5) for v in bbox], scenes_found=len(items), scenes_used=used,
-                scenes_table=rows[:50], pixels_with_data_pct=float(covered.mean() * 100), mean_observations=float(count[covered].mean()) if covered.any() else 0,
+                scenes_table=rows[:50], pixels_with_data_pct=float(covered.sum() / max(inside.sum(), 1) * 100),
+                mean_observations=float(count[covered].mean()) if covered.any() else 0,
                 note="Stored as surface reflectance x 10 000 (uint16, 0 = no data). In the Classification tab choose this file and the preset "
                      f"'{p['preset']}'. Pixels with 0 observations were cloudy in every scene: add scenes or widen the dates.")
 
 
-def download_dem(store, client, bbox=None, template=None, res=30, output_name="copernicus_dem_30m.tif"):
+def download_dem(store, client, bbox=None, template=None, res=30, output_name="copernicus_dem_30m.tif", clip=None):
     tpl = store.get(template) if template else None
     if tpl is not None:
         bbox = grid_bbox_lonlat(tpl.crs, tpl.transform, tpl.data.shape)
     crs, transform, shape = target_grid(bbox, float(res), tpl)
-    if shape[0] * shape[1] > MAX_PIXELS * 4:
-        raise ValueError("Area too large for the DEM download at this resolution.")
+    if shape[0] * shape[1] > MAX_PIXELS * 3:
+        raise ValueError("Area too large for the DEM download at this resolution; use a coarser pixel size.")
     dem, ok, ids = single_asset(client, "cop-dem-glo-30", "data", bbox, crs, transform, shape, Resampling.bilinear, "float32", "2021-01-01", "2022-12-31")
+    ok &= clip_mask(clip, crs, transform, shape)
     arr = np.where(ok, dem, -9999).astype("float32")
     store.outputs[output_name] = stack_bytes(arr[None], crs, transform, ["elevation_m"], nodata=-9999)
     v = arr[ok]
-    return dict(output=output_name, tiles=ids, crs=crs.to_string(), resolution_m=abs(transform.a), size=[int(shape[1]), int(shape[0])],
+    return dict(output=output_name, clipped=clip is not None, area_km2=float(ok.sum() * abs(transform.a * transform.e) / 1e6), tiles=ids, crs=crs.to_string(), resolution_m=abs(transform.a), size=[int(shape[1]), int(shape[0])],
                 min_m=float(v.min()) if v.size else None, max_m=float(v.max()) if v.size else None, coverage_pct=float(ok.mean() * 100),
                 note="Copernicus DEM GLO-30 (ESA / Airbus), a digital surface model: elevations include buildings and canopy.")
 
 
-def download_worldcover(store, client, bbox=None, template=None, res=10, year=2021, output_name=None):
+def download_worldcover(store, client, bbox=None, template=None, res=10, year=2021, output_name=None, clip=None):
     tpl = store.get(template) if template else None
     if tpl is not None:
         bbox = grid_bbox_lonlat(tpl.crs, tpl.transform, tpl.data.shape)
     crs, transform, shape = target_grid(bbox, float(res), tpl)
-    if shape[0] * shape[1] > MAX_PIXELS * 4:
-        raise ValueError("Area too large for WorldCover at this resolution.")
+    if shape[0] * shape[1] > MAX_PIXELS * 3:
+        raise ValueError("Area too large for WorldCover at this resolution; use a coarser pixel size (e.g. 30 m).")
     wc, ok, ids = single_asset(client, "esa-worldcover", "map", bbox, crs, transform, shape, Resampling.nearest, "uint8",
                                f"{int(year)}-01-01", f"{int(year)}-12-31")
+    ok &= clip_mask(clip, crs, transform, shape)
     arr = np.where(ok, wc, 0).astype("uint8")
     name = output_name or f"ESA_WorldCover_{int(year)}.tif"
     store.outputs[name] = stack_bytes(arr[None], crs, transform, ["land_cover"], nodata=0)

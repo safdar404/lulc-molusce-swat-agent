@@ -23,6 +23,7 @@ import cartography  # noqa: E402
 SKIP = {"list_session", "describe_table", "inspect_raster", "describe_vector", "practical_guide", "generate_report", "record_model_settings"}
 
 REFS = {
+    "hall": "Hall, D. K., Riggs, G. A., & Salomonson, V. V. (1995). Development of methods for mapping global snow cover using moderate resolution imaging spectroradiometer data. Remote Sensing of Environment, 54(2), 127-140.",
     "olofsson": "Olofsson, P., Foody, G. M., Herold, M., Stehman, S. V., Woodcock, C. E., & Wulder, M. A. (2014). Good practices for estimating area and assessing accuracy of land change. Remote Sensing of Environment, 148, 42-57.",
     "pontius2011": "Pontius, R. G., Jr., & Millones, M. (2011). Death to Kappa: birth of quantity disagreement and allocation disagreement for accuracy assessment. International Journal of Remote Sensing, 32(15), 4407-4429.",
     "pontius2014": "Pontius, R. G., Jr., & Santacruz, A. (2014). Quantity, exchange, and shift components of difference in a square contingency table. International Journal of Remote Sensing, 35(21), 7543-7554.",
@@ -129,6 +130,41 @@ def _lines(x, series, xlabel, ylabel, logy=False, title=None):
 
 
 # ------------------------------------------------------------------ section builders: (blocks, refs)
+def _b_hyps(ctx, a, r):
+    b = _df(r["bands"], ["from_m", "to_m", "area_km2", "area_pct", "cumulative_km2", "cumulative_pct"], 40)
+    fig, ax = plt.subplots(figsize=(6.4, 4.2))
+    mids = (b["from_m"] + b["to_m"]) / 2
+    ax.barh(mids, b["area_km2"], height=(b["to_m"] - b["from_m"]) * 0.8, color="#15803D", label="area per band")
+    ax.set_xlabel("Area per band (km²)")
+    ax.set_ylabel("Elevation (m)")
+    ax2 = ax.twiny()
+    ax2.plot(b["cumulative_km2"], b["to_m"], color="#DC2626", marker="D", ms=4, label="hypsometric curve")
+    ax2.set_xlabel("Cumulative area (km²)")
+    fig.legend(loc="lower right", fontsize=8, frameon=False)
+    return [("p", f"The basin covers {r['area_km2']:,.0f} km² between {r['min_m']:,.0f} and {r['max_m']:,.0f} m (mean {r['mean_m']:,.0f} m, median "
+                  f"{r['median_m']:,.0f} m; 90% of the area lies between {r['percentiles_m']['p5']:,.0f} and {r['percentiles_m']['p95']:,.0f} m). The hypsometric "
+                  f"integral is {r['hypsometric_integral']:.2f}. " + r["note"]),
+            ("table", b, "Area per elevation band"), ("fig", _png(fig), "Area per elevation band and hypsometric curve")], []
+
+
+def _b_snow(ctx, a, r):
+    blocks = [("p", f"Snow and ice were mapped where NDSI > {r['ndsi_threshold']} and NIR reflectance > {r['nir_threshold']} (Hall et al. 1995)"
+                    + (", with water masked by WorldCover" if r["water_masked"] else "") + f": {r['snow_ice_km2']:,.1f} km² ({r['snow_ice_pct']:.1f}% of the "
+                    f"{r['mapped_km2']:,.0f} km² mapped). " + r["note"])]
+    m = _map(ctx, r["output"], "Snow and ice (NDSI)", r["labels"])
+    if m:
+        blocks.append(("fig", m, "Snow and ice map"))
+    return blocks, ["hall"]
+
+
+def _b_zone(ctx, a, r):
+    t = _df(r["zones"], max_rows=30)
+    txt = f"Class areas of {r['layer']} were summarised by elevation zone of {r['dem']}."
+    if r.get("snowline_50pct_m"):
+        txt += f" {r['focus_class']} covers half of the zone area from about {r['snowline_50pct_m']:,.0f} m upwards."
+    return [("p", txt), ("table", t.iloc[:, :12], "Class area (km²) and share (%) by elevation zone")], []
+
+
 def _b_comp(ctx, a, r):
     t = pd.DataFrame(r.get("scenes_table", [])).head(20)
     blocks = [("p", f"A cloud-masked {r.get('product')} composite was built from the {len(r['scenes_used'])} least-cloudy of {r['scenes_found']} scenes "
@@ -385,6 +421,7 @@ def _b_zonal(ctx, a, r):
 
 SECTIONS = [
     ("Data acquisition", ["download_composite", "download_dem", "download_worldcover"]),
+    ("Basin topography, snow and ice", ["hypsometry", "map_snow_cover", "elevation_zone_statistics"]),
     ("Image classification", ["spectral_indices", "classify_image", "cluster_image"]),
     ("Accuracy assessment", ["design_accuracy_sample", "area_adjusted_accuracy", "accuracy_assessment"]),
     ("Land-cover change", ["transition_matrix", "intensity_analysis", "change_frequency_raster", "trajectory_raster"]),
@@ -394,7 +431,7 @@ SECTIONS = [
                                            "lulc_flow_attribution"]),
     ("Zonal summaries", ["zonal_statistics"]),
 ]
-BUILDERS = {"download_composite": _b_comp, "download_dem": _b_dem, "download_worldcover": _b_wc, "spectral_indices": _b_indices, "classify_image": _b_classify, "area_adjusted_accuracy": _b_aaa, "design_accuracy_sample": _b_design,
+BUILDERS = {"hypsometry": _b_hyps, "map_snow_cover": _b_snow, "elevation_zone_statistics": _b_zone, "download_composite": _b_comp, "download_dem": _b_dem, "download_worldcover": _b_wc, "spectral_indices": _b_indices, "classify_image": _b_classify, "area_adjusted_accuracy": _b_aaa, "design_accuracy_sample": _b_design,
             "accuracy_assessment": _b_acc, "transition_matrix": _b_trans, "intensity_analysis": _b_ia, "change_frequency_raster": _b_freq,
             "trajectory_raster": _b_traj, "landscape_metrics": _b_lm, "moving_window_map": _b_mw, "hotspot_analysis": _b_hs, "driver_analysis": _b_drv,
             "simulate_lulc": _b_sim, "validate_simulation": _b_val, "hindcast_validation": _b_hind, "swat_landuse_lookup": _b_lookup,

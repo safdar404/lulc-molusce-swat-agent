@@ -1,4 +1,17 @@
 # Changelog
+## 1.4.0
+- New **🏔️ Snow, ice & elevation** tab (`cryo.py`, `cryo_tab.py`) for mountain basins such as Astore and Hunza.
+  - **Hypsometry**: area per elevation band or custom zones (e.g. 2500 / 3500 / 4500 / 5500 m), cumulative hypsometric curve,
+    elevation range, mean, median, 5-95 % range and hypsometric integral, clipped to the basin polygon.
+  - **Snow and ice mapping** from a composite: NDSI > 0.4 and NIR > 0.11 (Hall et al. 1995), optional WorldCover water mask; snow / ice
+    map and NDSI raster.
+  - **Elevation-zone statistics** for any class map (snow, glaciers, land cover): area and share per zone, and the 50 % snowline.
+- **Basin support**: KMZ / KML upload, including ArcGIS "Layer To KML" exports, whose HTML attribute tables are turned back into columns
+  (e.g. GADM district names). Downloads can use a vector's extent and be **clipped to the basin polygon**. Pixel limit raised to 9
+  million per band (about 90 × 90 km at 30 m).
+- NDSI added to the spectral index library.
+- Agent: new tools `hypsometry`, `map_snow_cover`, `elevation_zone_statistics`; download tools accept `vector` and `clip_vector`.
+  The report gains a "Basin topography, snow and ice" section.
 ## 1.3.1
 - Verified live on Streamlit Cloud (Islamabad, 10 × 10 km): Sentinel-2 L2A 2025 search (46 scenes), 6-scene cloud-free composite
   (1021 × 1023 px at 10 m, 100 % coverage), Copernicus DEM (491-776 m) and ESA WorldCover 2021 on the composite's grid.

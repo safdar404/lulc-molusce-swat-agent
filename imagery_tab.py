@@ -19,6 +19,7 @@ def _aoi(ctx, R, key):
     mode = st.radio("Area of interest", ["Centre point + size", "Bounding box (lon/lat)", "Extent and grid of a loaded raster", "Extent of a loaded vector"],
                     horizontal=True, key=f"{key}_mode")
     template, bbox = None, None
+    st.session_state[f"{key}_clipgdf"] = None
     if mode == "Centre point + size":
         c = st.columns(3)
         lat = c[0].number_input("Latitude", -85.0, 85.0, 33.6844, format="%.5f", key=f"{key}_lat")
@@ -38,14 +39,22 @@ def _aoi(ctx, R, key):
             st.info("Upload or create a raster first.")
             return None, None
         template = st.selectbox("Raster (its CRS, pixel size and extent are reused, so outputs align exactly)", maps, key=f"{key}_tpl")
+        vs = ctx.__dict__.get("vectors", {})
+        if vs:
+            cv = st.selectbox("Clip to polygon (optional)", ["(none)"] + list(vs), key=f"{key}_tplclip")
+            st.session_state[f"{key}_clipgdf"] = None if cv == "(none)" else cv
     else:
         vs = ctx.__dict__.get("vectors", {})
         if not vs:
             st.info("Upload a vector (study-area boundary) in the sidebar first.")
             return None, None
-        v = st.selectbox("Vector layer", list(vs), key=f"{key}_vec")
-        b = vs[v].to_crs(4326).total_bounds
-        bbox = tuple(float(x) for x in b)
+        c = st.columns([2, 1])
+        v = c[0].selectbox("Vector layer (e.g. basin boundary from a KMZ, shapefile or GeoPackage)", list(vs), key=f"{key}_vec")
+        bbox = I.vector_bbox(vs[v])
+        if c[1].checkbox("Clip to the polygon", True, key=f"{key}_clip", help="Pixels outside the basin become no data, so all statistics cover the basin only."):
+            st.session_state[f"{key}_clipgdf"] = v
+        g = vs[v].to_crs(vs[v].estimate_utm_crs())
+        st.caption(f"{v}: {len(g)} feature(s), {g.area.sum() / 1e6:,.1f} km².")
     if bbox:
         st.caption(f"Bounding box (lon/lat): {bbox[0]:.4f}, {bbox[1]:.4f}, {bbox[2]:.4f}, {bbox[3]:.4f}")
     return bbox, template
@@ -54,10 +63,12 @@ def _aoi(ctx, R, key):
 def render(ctx, R):
     ui.section("🌍", "Download imagery and base layers", "Microsoft Planetary Computer: Sentinel-2 / Landsat cloud-free composites, Copernicus DEM, ESA WorldCover", "green")
     st.caption("Only the area of interest is read from the cloud-optimised files. Larger areas need coarser pixels: the limit is "
-               f"{I.MAX_PIXELS:,} pixels per band (about 20 × 20 km at 10 m or 60 × 60 km at 30 m).")
+               f"{I.MAX_PIXELS:,} pixels per band (about 30 × 30 km at 10 m, 90 × 90 km at 30 m, 180 × 180 km at 60 m).")
     bbox, template = _aoi(ctx, R, "img")
     if bbox is None and template is None:
         return
+    cv = st.session_state.get("img_clipgdf")
+    clip = ctx.__dict__.get("vectors", {}).get(cv) if cv else None
 
     ui.section("🛰️", "Cloud-free composite", "Per-pixel cloud and shadow masking, then the median of the clearest scenes", "blue")
     c = st.columns(4)
@@ -94,7 +105,7 @@ def render(ctx, R):
         bar = st.progress(0.0, "Starting…")
         try:
             res_ = I.download_composite(ctx.store, _client(), product, bbox, start.isoformat(), end.isoformat(), cloud, int(nsc), res, template, out,
-                                        progress=lambda f, msg: bar.progress(float(f), msg), statistic=stat, platforms=plats)
+                                        progress=lambda f, msg: bar.progress(float(f), msg), statistic=stat, platforms=plats, clip=clip)
             ctx.store.add(res_["output"], ctx.store.outputs[res_["output"]])
             ctx.store.add(res_["observation_count"], ctx.store.outputs[res_["observation_count"]])
             ctx.record("download_composite", {"product": product, "bbox": bbox, "template": template, "start": str(start), "end": str(end),
@@ -129,7 +140,7 @@ def render(ctx, R):
     c = st.columns(2)
     if c[0].button("⬇️ Download DEM"):
         try:
-            d = I.download_dem(ctx.store, _client(), bbox, template, dres)
+            d = I.download_dem(ctx.store, _client(), bbox, template, dres, clip=clip)
             ctx.store.add(d["output"], ctx.store.outputs[d["output"]])
             ctx.record("download_dem", {"bbox": bbox, "template": template}, d["output"])
             ctx.__dict__.setdefault("results", []).append(dict(tool="download_dem", args={}, result=d, time=datetime.datetime.now().isoformat(timespec="seconds")))
@@ -139,7 +150,7 @@ def render(ctx, R):
             st.error(f"DEM download failed: {type(e).__name__}: {e}")
     if c[1].button("⬇️ Download WorldCover"):
         try:
-            w = I.download_worldcover(ctx.store, _client(), bbox, template, wres, wyear)
+            w = I.download_worldcover(ctx.store, _client(), bbox, template, wres, wyear, clip=clip)
             ctx.store.add(w["output"], ctx.store.outputs[w["output"]])
             ctx.record("download_worldcover", {"bbox": bbox, "template": template, "year": wyear}, w["output"])
             ctx.__dict__.setdefault("results", []).append(dict(tool="download_worldcover", args={"labels": w["labels"]}, result=w,

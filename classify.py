@@ -44,6 +44,7 @@ INDICES = {
     "MNDWI": (("green", "swir1"), lambda b: (b["green"] - b["swir1"]) / (b["green"] + b["swir1"] + _e), "Xu 2006"),
     "AWEIsh": (("blue", "green", "nir", "swir1", "swir2"), lambda b: b["blue"] + 2.5 * b["green"] - 1.5 * (b["nir"] + b["swir1"]) - 0.25 * b["swir2"], "Feyisa et al. 2014"),
     "NDMI": (("nir", "swir1"), lambda b: (b["nir"] - b["swir1"]) / (b["nir"] + b["swir1"] + _e), "Gao 1996"),
+    "NDSI": (("green", "swir1"), lambda b: (b["green"] - b["swir1"]) / (b["green"] + b["swir1"] + _e), "Hall et al. 1995"),
     "NBR": (("nir", "swir2"), lambda b: (b["nir"] - b["swir2"]) / (b["nir"] + b["swir2"] + _e), "Key & Benson 2006"),
     "NDBI": (("swir1", "nir"), lambda b: (b["swir1"] - b["nir"]) / (b["swir1"] + b["nir"] + _e), "Zha et al. 2003"),
     "UI": (("swir2", "nir"), lambda b: (b["swir2"] - b["nir"]) / (b["swir2"] + b["nir"] + _e), "Kawamura et al. 1996"),
