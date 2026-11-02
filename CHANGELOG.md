@@ -1,4 +1,19 @@
 # Changelog
+## 0.9.0
+- New **🔮 Drivers & scenarios** tab (`simulate.py`, `simulate_tab.py`).
+  - **Driver layers**: distance to a class (recomputed from each base map), distance to features such as roads or rivers, slope from a
+    DEM (Horn 1981) and any continuous layer. Exportable as GeoTIFFs for use as MOLUSCE factors.
+  - **Driver screening** per transition: Cramér's V and AUC heat maps, variance inflation factors and a correlation matrix.
+  - **Transition potentials** with logistic regression, Random Forest or an ANN (multilayer perceptron, as in MOLUSCE), trained on
+    balanced samples with a hold-out AUC.
+  - **Markov quantities** with fractional matrix powers for any projection length, and **cellular-automaton allocation** with a
+    neighbourhood effect, iterations and optional stochastic perturbation.
+  - **Scenarios**: business as usual, ecological protection and development priority (development / natural classes, protected-area
+    mask, forbidden transitions, demand multipliers), with a one-click three-scenario comparison chart.
+  - **Hindcast validation**: figure of merit with hits / misses / wrong hits / false alarms, Kappa simulation (van Vliet et al. 2011),
+    quantity / allocation disagreement and producer's / user's accuracy of change, against the null (no-change) model and any other
+    simulated map, e.g. your MOLUSCE output.
+- Agent: new tools `driver_analysis`, `make_driver_layers`, `simulate_lulc`, `validate_simulation`, and a rule to hindcast before projecting.
 ## 0.8.0
 - New **🛰️ Classification** tab (`classify.py`, `classify_tab.py`): the app now produces LULC maps, not only evaluates them.
   - **Multi-band GeoTIFFs** are read in full; each band is addressable as `file.tif#k` in every tool and tab (e.g. RGB composites from a stack).

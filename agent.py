@@ -16,7 +16,8 @@ Rules:
 8. For change between 2+ dates run intensity_analysis after the accuracy check; explain fast/slow intervals, active/dormant categories and targeted transitions, and flag alternation as possible map error.
 9. For fragmentation or spatial pattern use landscape_metrics (compare dates on one grid and legend); for where change concentrates use hotspot_analysis and report block size, neighbourhood and FDR setting, testing more than one scale.
 10. To make a LULC map use classify_image (stack + preset, NDVI/MNDWI/NDBI/BSI indices, Random Forest by default) and report the spatial-block CV accuracy; then recommend independent validation with design_accuracy_sample and area_adjusted_accuracy. Multi-band files expose bands as 'file.tif#k'.
-11. Be concise. If information is missing, ask one clear question."""
+11. For future LULC: driver_analysis first, then simulate_lulc in hindcast mode (validate_against the latest observed map, compare_with any MOLUSCE output) and only then future scenarios. Report FoM and Kappa simulation against the null model, and present scenarios as conditional what-ifs.
+12. Be concise. If information is missing, ask one clear question."""
 
 
 def run_agent(api_key, model, messages, session, user_text, max_rounds=10):

@@ -1,6 +1,6 @@
 """Audited, read-only tools shared by the Streamlit UI and the LLM agent. Nothing touches the file system."""
 import json
-import changeops, classify, hydro, knowledge, patternops, rasterops
+import changeops, classify, hydro, knowledge, patternops, rasterops, simulate
 
 REG = {}
 S = lambda t, d, **k: dict(type=t, description=d, **k)
@@ -283,6 +283,58 @@ def _km(ctx, k, band_map=None, stack=None, preset=None, extra_layers=(), indices
     res = classify.kmeans(ctx.store, spec, k, output_name)
     _register(ctx, output_name)
     return res
+
+
+# ---------------- v0.9.0: drivers, scenario simulation, hindcast validation ----------------
+DRIVERS = S("array", "Drivers: objects {type: distance_to_class, class: code} | {type: distance_to_layer, name: raster} | {type: slope, name: dem} | "
+            "{type: layer, name: raster}. Default: distance to each target class.", items={"type": "object"})
+
+
+@tool("driver_analysis", "Screen candidate drivers of land change for the main transitions between two maps: Cramér's V and AUC per driver and transition, VIF and correlations.",
+      {"map_from": STR("Earlier LULC map"), "map_to": STR("Later LULC map"), "drivers": DRIVERS, "n_transitions": S("integer", "Number of transitions (default 6)")},
+      ["map_from", "map_to"])
+def _da(ctx, map_from, map_to, drivers=None, n_transitions=6):
+    return simulate.driver_analysis(ctx.store, map_from, map_to, drivers, n_transitions)
+
+
+@tool("make_driver_layers", "Write driver GeoTIFFs (distance to classes or features in metres, slope in degrees) that can also be used as MOLUSCE factors.",
+      {"base_map": STR("LULC map for class distances"), "classes": S("array", "Class codes", items={"type": "integer"}),
+       "layers": S("array", "Feature rasters (roads, rivers): distance to non-zero cells", items={"type": "string"}), "dem": STR("DEM for slope")}, ["base_map"])
+def _mdl(ctx, base_map, classes=(), layers=(), dem=None):
+    res = simulate.make_driver_layers(ctx.store, base_map, classes or (), layers or (), dem)
+    _register(ctx, *res["outputs"])
+    return res
+
+
+@tool("simulate_lulc", "Markov-CA land-change simulation: calibrates transition potentials (logistic, Random Forest or ANN) and Markov quantities on map_from->map_to, "
+      "allocates change with a cellular automaton under a scenario (Business as usual, Ecological protection, Development priority; protected mask, forbidden "
+      "transitions, demand multipliers) and, if validate_against is given, validates the result (FoM, Kappa simulation, null model, other simulated maps such as MOLUSCE).",
+      {"map_from": STR("Calibration earlier map"), "map_to": STR("Calibration later map"), "year_from": S("integer", "Year of map_from"),
+       "year_to": S("integer", "Year of map_to"), "year_target": S("integer", "Year to simulate"), "start_map": STR("Map to start from (default map_to)"),
+       "start_year": S("integer", "Year of start_map (default year_to)"), "drivers": DRIVERS, "model": S("string", "Potential model", enum=simulate.POTENTIAL_MODELS),
+       "n_transitions": S("integer", "Transitions to model (default 6)"), "scenario": S("string", "Scenario", enum=list(simulate.SCENARIOS)),
+       "growth_classes": S("array", "Development classes", items={"type": "integer"}), "natural_classes": S("array", "Natural classes", items={"type": "integer"}),
+       "multipliers": S("object", "{'i->j': factor}"), "forbidden": S("array", "Forbidden transitions 'i->j'", items={"type": "string"}),
+       "protected_layer": STR("Protected-area raster (non-zero = no change)"), "apply_protection": S("boolean", "Force protection on/off (default: scenario)"),
+       "neighbourhood": S("integer", "3, 5 or 7"), "weight": S("number", "Neighbourhood weight 0-1 (default 0.5)"), "iterations": S("integer", "CA iterations"),
+       "stochastic": S("number", "Random perturbation 0-1"), "output_name": STR("Output map name"), "potential_prefix": STR("Save potential maps with this prefix"),
+       "validate_against": STR("Observed map of the target year (hindcast)"), "compare_with": S("array", "Other simulated maps to compare", items={"type": "string"})},
+      ["map_from", "map_to", "year_from", "year_to", "year_target"])
+def _sim(ctx, map_from, map_to, year_from, year_to, year_target, validate_against=None, compare_with=(), **kw):
+    sim = simulate.simulate(ctx.store, map_from, map_to, year_from, year_to, year_target, **kw)
+    _register(ctx, sim["output"], *sim.get("potential_maps", []))
+    out = dict(simulation=sim)
+    if validate_against:
+        out["validation"] = simulate.validate(ctx.store, sim["start_map"], validate_against, [sim["output"]] + list(compare_with or ()))
+    return out
+
+
+@tool("validate_simulation", "Compare one or more simulated maps (yours or MOLUSCE output) with the observed map: FoM, hits/misses/false alarms, Kappa simulation, "
+      "quantity/allocation disagreement, versus the null (no-change) model.",
+      {"initial": STR("Map at the start of the simulation"), "observed": STR("Observed map of the target year"),
+       "simulated": S("array", "Simulated maps", items={"type": "string"})}, ["initial", "observed", "simulated"])
+def _vs(ctx, initial, observed, simulated):
+    return simulate.validate(ctx.store, initial, observed, simulated)
 
 
 def run_tool(ctx, name, args):

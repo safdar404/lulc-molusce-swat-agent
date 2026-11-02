@@ -8,6 +8,7 @@ Open-source tools for a land-use/land-cover (LULC) change, MOLUSCE simulation an
 - **Live map canvas** (`canvas_tab.py`, `live.py`, `cartography.py`): real-time processing monitor that computes LULC, change, disagreement, spectral-index, RGB-composite and continuous maps strip by strip while drawing them on a canvas, then composes an export-ready map with title, legend, scale bar, north arrow, grid coordinates and metadata box (PNG up to 600 DPI, PDF).
 - **Advanced accuracy & change analysis** (`olofsson.py`, `intensity.py`, `changeops.py`, `advanced_tabs.py`): Olofsson et al. (2014) area-adjusted accuracy with error-adjusted areas and 95% CIs, sample design and stratified random points, multi-date Intensity Analysis (Aldwaik & Pontius 2012), change-frequency and trajectory maps.
 - **Classification engine** (`classify.py`, `classify_tab.py`): Sentinel-2 / Landsat presets, 15 spectral indices, Random Forest, Extra Trees, gradient boosting, SVM, maximum likelihood and K-means, random vs spatial-block cross-validation, confidence maps.
+- **Drivers & scenarios** (`simulate.py`, `simulate_tab.py`): driver layers and screening (Cramér's V, AUC, VIF), logistic / Random Forest / ANN transition potentials, Markov-CA simulation with business-as-usual, ecological-protection and development scenarios, and hindcast validation (FoM, Kappa simulation) against the null model and MOLUSCE output.
 - **Landscape pattern & hotspots** (`landscape.py`, `hotspot.py`, `patternops.py`, `pattern_tab.py`): FRAGSTATS-definition class and landscape metrics across dates, moving-window maps, Getis-Ord Gi* and Local Moran's I hotspot maps with FDR correction.
 - **Look and feel** (`ui.py`, `logo.svg`, `logo.png`): vibrant multi-colour theme, logo, hero header, colour-coded metric cards and charts.
 - **Analysis core** (`metrics.py`, `rasterops.py`, `hydro.py`, `knowledge.py`, `store.py`, `session.py`, `agent_tools.py`, `agent.py`): statistics, raster operations and the agent loop.
@@ -26,7 +27,7 @@ moving-window maps, Gi* / LISA hotspot analysis, supervised and unsupervised ima
 in the manual's template (date, input, tool version, parameters, output, note).
 
 ## What it does not do
-It does **not** run MOLUSCE's ANN or cellular automata, QSWAT+ delineation or SWAT+ calibration, and it does not download imagery. It prepares inputs,
+It does **not** run MOLUSCE itself (it has its own Markov-CA simulator and compares with MOLUSCE output), QSWAT+ delineation or SWAT+ calibration, and it does not download imagery. It prepares inputs,
 checks them and evaluates results. AI output can be wrong: verify every number independently before it enters a thesis.
 
 ## Quick start
@@ -39,7 +40,7 @@ On Streamlit Community Cloud set **Main file path** to `app.py`. With Docker: `d
 Only add `ANTHROPIC_API_KEY` to a public deployment's secrets if you accept that visitors spend your credit.
 
 ## Testing status
-`pytest -q` runs `test_core.py`, `test_advanced.py`, `test_pattern.py` and `test_classify.py` (Olofsson 2014 worked-example benchmark, hand-computed intensity analysis,
+`pytest -q` runs `test_core.py`, `test_advanced.py`, `test_pattern.py`, `test_classify.py` and `test_simulate.py` (Olofsson 2014 worked-example benchmark, hand-computed intensity analysis,
 store-level accuracy / intensity / trajectory pipelines; hand-computed landscape metrics, brute-force Gi*). Landscape metrics were
 cross-checked against pylandstats and hotspot statistics against PySAL esda. `test_core.py` covers confusion matrix, accuracy and kappa, Pontius disagreement, figure of merit, hydrology metrics, raster area/transition
 statistics on a synthetic in-memory GeoTIFF, and the tool registry. The agent loop has not been tested against the live API.
