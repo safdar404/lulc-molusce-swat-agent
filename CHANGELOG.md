@@ -1,4 +1,14 @@
 # Changelog
+## 0.5.0
+- New **🛰️ Live map canvas** tab. A real-time processing monitor runs the analysis strip by strip at full resolution and draws
+  the result on a canvas as it is computed, with a progress bar, live metrics, running class areas and a console log.
+  Analyses: classified LULC map, NDVI / NDWI / NDBI, LULC change (from → to), hindcast disagreement, satellite RGB composite
+  (true / false colour, 2–98 % stretch) and continuous rasters (DEM, single band).
+- New export-ready **map composer** (`cartography.py`): title and subtitle, map frame with grid coordinates (metres or degrees),
+  legend (class colours with hectares and %, or a colour bar with statistics), alternating scale bar, north arrow, metadata box
+  (CRS, pixel size, source, author, date) and neatline. Download as PNG (150–600 DPI) or print PDF. Any loaded raster or
+  generated output can be mapped.
+- Generated outputs (index, transition, disagreement GeoTIFFs) can now be used as inputs to other tools.
 ## 0.4.2
 - Fix: after a multi-file update Streamlit Cloud kept old helper modules cached ("cannot import name 'friendly_error' from 'agent'").
   `app.py` now reloads any local module whose file changed, so updates apply without a manual reboot.

@@ -5,6 +5,7 @@
 Open-source tools for a land-use/land-cover (LULC) change, MOLUSCE simulation and SWAT+ hydrology PhD workflow:
 
 - **Streamlit web app** (`app.py`): upload GeoTIFFs and CSVs, run audited checks and statistics, ask an AI agent that uses the same tools, download a processing log.
+- **Live map canvas** (`canvas_tab.py`, `live.py`, `cartography.py`): real-time processing monitor that computes LULC, change, disagreement, spectral-index, RGB-composite and continuous maps strip by strip while drawing them on a canvas, then composes an export-ready map with title, legend, scale bar, north arrow, grid coordinates and metadata box (PNG up to 600 DPI, PDF).
 - **Look and feel** (`ui.py`, `logo.svg`, `logo.png`): vibrant multi-colour theme, logo, hero header, colour-coded metric cards and charts.
 - **Analysis core** (`metrics.py`, `rasterops.py`, `hydro.py`, `knowledge.py`, `store.py`, `session.py`, `agent_tools.py`, `agent.py`): statistics, raster operations and the agent loop.
 

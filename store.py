@@ -19,17 +19,24 @@ class Store:
     def __init__(self):
         self.rasters, self.outputs = {}, {}
 
-    def add(self, name, raw):
+    def add(self, name, raw, register=True):
         with MemoryFile(raw) as mf, mf.open() as src:
             a = src.read(1)
             nd = src.nodata
             m = np.zeros(a.shape, bool) if nd is None else (a == nd)
             if a.dtype.kind == "f":
                 m = m | ~np.isfinite(a)
-            self.rasters[name] = Raster(name, a, m, nd, src.transform, src.crs, src.profile)
-        return self.rasters[name]
+            r = Raster(name, a, m, nd, src.transform, src.crs, src.profile)
+        if register:
+            self.rasters[name] = r
+        return r
 
     def get(self, name):
+        if name not in self.rasters and name in self.outputs:  # generated outputs can be re-used as inputs (e.g. mapped)
+            cache = self.__dict__.setdefault("_out_cache", {})
+            if name not in cache or cache[name][0] is not self.outputs[name]:
+                cache[name] = (self.outputs[name], self.add(name, self.outputs[name], register=False))
+            return cache[name][1]
         if name not in self.rasters:
             raise ValueError(f"Raster not loaded: {name}. Loaded: {list(self.rasters)}")
         return self.rasters[name]

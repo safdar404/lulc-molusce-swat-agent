@@ -138,3 +138,32 @@ def test_run_agent_rolls_back_history_on_failure(monkeypatch):
     with pytest.raises(Boom):
         agent.run_agent("k", "m", msgs, Session(), "hi")
     assert msgs == []
+
+
+# ---------- live canvas + cartography ----------
+def test_live_jobs_and_map_layout():
+    import cartography, live
+    s = Session()
+    prof = dict(driver="GTiff", height=60, width=80, count=1, crs=CRS.from_epsg(32643), transform=from_origin(300000, 3700000, 30, 30))
+    a = np.ones((60, 80), "uint8"); a[:, 40:] = 2
+    b = a.copy(); b[:30, :40] = 2
+    s.store.add("t1.tif", to_geotiff_bytes(prof, a, "uint8", 0))
+    s.store.add("t2.tif", to_geotiff_bytes(prof, b, "uint8", 0))
+    job = live.build(s.store, "LULC change (from → to)", ["t1.tif", "t2.tif"], labels={"1": "Forest", "2": "Built-up"})
+    frames = list(live.run(job, 6))
+    assert len(frames) == 6 and job.rows_done == 60
+    st = job.stats()
+    assert st["changed %"] == pytest.approx(25.0)
+    assert st["classes"][12] == pytest.approx(30 * 40 * 900 / 1e4)
+    assert job.labels["12"] == "Forest → Built-up"
+    png = cartography.fig_bytes(cartography.compose_map(job.arr, job.mask, job.transform, job.crs, kind=job.kind, title="t", labels=job.labels), "png", 60)
+    assert png[:4] == b"\x89PNG"
+    f = cartography.preview_frame(job.arr, job.mask, 30, kind=job.kind, **live.frame_style(job, [s.store.get("t1.tif"), s.store.get("t2.tif")]))
+    assert f.shape == (60, 80, 3)
+    s.store.outputs["x.tif"] = job.geotiff()
+    assert s.store.get("x.tif").data.max() == 22  # outputs are readable as inputs
+
+
+def test_scalebar_nice_numbers():
+    import cartography
+    assert cartography._nice(3700) == 2500 and cartography._nice(0.9) == 0.5

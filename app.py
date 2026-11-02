@@ -9,7 +9,7 @@ import importlib  # noqa: E402
 
 # Streamlit re-runs app.py when it changes but keeps helper modules cached. After a multi-file update that leaves
 # a stale mix (e.g. "cannot import name ... from 'agent'"), so reload every local module whose file changed.
-_LOCAL_MODULES = ["metrics", "knowledge", "store", "rasterops", "hydro", "session", "agent_tools", "agent", "ui"]  # dependency order
+_LOCAL_MODULES = ["metrics", "knowledge", "store", "rasterops", "hydro", "session", "agent_tools", "agent", "ui", "cartography", "live", "canvas_tab"]  # dependency order
 for _name in _LOCAL_MODULES:
     _mod = sys.modules.get(_name)
     if _mod is not None and getattr(_mod, "__file__", None):
@@ -28,10 +28,10 @@ st.set_page_config(page_title="LULC-MOLUSCE-SWAT+ Agent", page_icon=ui.page_icon
 ui.apply_theme()
 
 try:
-    import hydro, knowledge
+    import canvas_tab, hydro, knowledge
     from agent import DEFAULT_MODEL, friendly_error, offline_analysis, run_agent
     from session import Session
-    __version__ = "0.4.2"
+    __version__ = "0.5.0"
     for _name in _LOCAL_MODULES:
         _mod = sys.modules.get(_name)
         if _mod is not None and getattr(_mod, "__file__", None):
@@ -109,7 +109,7 @@ def download_outputs():
         st.download_button(f"⬇️ Download {n}", b, file_name=n, mime="image/tiff", key=f"dl_{n}")
 
 
-tabs = st.tabs(["📚 Guide", "🔍 Inspect & geometry", "🗺️ Area & transitions", "🎯 Accuracy", "⏪ Hindcast", "💧 Hydrology", "🤖 Agent", "📝 Log"])
+tabs = st.tabs(["📚 Guide", "🛰️ Live map canvas", "🔍 Inspect & geometry", "🗺️ Area & transitions", "🎯 Accuracy", "⏪ Hindcast", "💧 Hydrology", "🤖 Agent", "📝 Log"])
 
 # ---------------- Guide ----------------
 with tabs[0]:
@@ -123,8 +123,12 @@ with tabs[0]:
     st.info("**How this fits your workflow:** run MOLUSCE (ANN / cellular automata) and QSWAT+ in QGIS as usual, then upload their outputs here "
             "to check raster geometry, validate the hindcast (kappa, figure of merit) and score SWAT+ runs (NSE, PBIAS, KGE).", icon="🧭")
 
-# ---------------- Inspect ----------------
+# ---------------- Live map canvas ----------------
 with tabs[1]:
+    canvas_tab.render(ctx, __version__)
+
+# ---------------- Inspect ----------------
+with tabs[2]:
     if need(R, "GeoTIFF rasters"):
         ui.section("🔍", "Inspect raster", "CRS, size, pixel size, origin, NoData and class values", "blue")
         a = st.selectbox("Inspect raster", R)
@@ -149,7 +153,7 @@ with tabs[1]:
         download_outputs()
 
 # ---------------- Area / transitions ----------------
-with tabs[2]:
+with tabs[3]:
     if need(R, "LULC rasters"):
         ui.section("🗺️", "LULC area statistics", "Pixel counts, hectares and shares per class", "pink")
         a = st.selectbox("LULC raster", R, key="area_r")
@@ -183,7 +187,7 @@ with tabs[2]:
             download_outputs()
 
 # ---------------- Accuracy ----------------
-with tabs[3]:
+with tabs[4]:
     if need(R, "a classified raster") and need(T, "a validation CSV (columns: x, y, reference class)"):
         ui.section("🎯", "Accuracy assessment", "Confusion matrix, overall / user's / producer's accuracy and kappa", "orange")
         a = st.selectbox("Classified raster", R, key="acc_r")
@@ -205,7 +209,7 @@ with tabs[3]:
                 st.caption(res["warning"])
 
 # ---------------- Hindcast ----------------
-with tabs[4]:
+with tabs[5]:
     ui.section("⏪", "Hindcast validation", "Kappa, quantity / allocation disagreement and figure of merit", "pink")
     if len(R) < 2:
         st.info("Upload at least two LULC rasters (observed and simulated) in the sidebar to validate a hindcast.")
@@ -229,7 +233,7 @@ with tabs[4]:
         download_outputs()
 
 # ---------------- Hydrology ----------------
-with tabs[5]:
+with tabs[6]:
     ui.section("💧", "Hydrological performance", "NSE, PBIAS, R² and KGE from observed vs simulated discharge", "blue")
     if need(T, "observed and simulated discharge CSV files"):
         c = st.columns(2)
@@ -252,7 +256,7 @@ with tabs[5]:
                 st.caption(res["caution"])
 
 # ---------------- Agent ----------------
-with tabs[6]:
+with tabs[7]:
     ui.section("🤖", "Research agent", "Calls the same audited tools as the other tabs and evaluates MOLUSCE / QSWAT+ results you bring from QGIS.", "violet")
     for role, text in st.session_state.chat:
         is_user = role not in ("assistant", "tool", "error")
@@ -278,7 +282,7 @@ with tabs[6]:
         st.rerun()
 
 # ---------------- Log ----------------
-with tabs[7]:
+with tabs[8]:
     ui.section("📝", "Processing log", "Every tool call in the manual's template: date, input, tool version, parameters, output, note", "green")
     df = ctx.log_df()
     st.dataframe(df, hide_index=True)
