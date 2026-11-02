@@ -1,4 +1,9 @@
 # Changelog
+## 1.4.3
+- Landsat snow-aware mask keeps pixels with HIGH snow/ice confidence (QA_PIXEL bits 12-13) even when Fmask also flags them as
+  high-confidence cloud. In the live Astore run the composite reached 81 % coverage and the remaining holes were exactly the glaciers,
+  which Fmask labelled cloud in every scene.
+
 ## 1.4.2
 - Imagery: hard memory caps for basin-wide composites (GDAL block cache 96 MB, 4 MB VSI cache per file, 16 MB warp buffer, freed after each band).
   GDAL's default cache is 5 % of the host's RAM, which could get the cloud app restarted mid-download when a dozen full Landsat scenes were open.

@@ -154,7 +154,10 @@ def landsat_clear(qa, strict=False):
 
     Default (snow-aware): reject fill, cloud with HIGH confidence (bit 3 and bits 8-9 = 3), cloud shadow (bit 4) and high-confidence
     cirrus (bits 14-15 = 3); keep dilated-cloud buffers and medium-confidence cloud, which Fmask often assigns to bright snow and glacier
-    ice. Pixels flagged snow (bit 5) are kept unless the cloud confidence is high. strict=True rejects every cloud-related flag (bits 1-4)."""
+    ice. Pixels flagged snow (bit 5) are kept unless the cloud confidence is high. Pixels with HIGH snow/ice confidence (bits 12-13 = 3)
+    are kept even when Fmask also calls them high-confidence cloud: in glaciated basins (Astore, Hunza) Fmask labels permanent ice as cloud
+    in every scene, leaving holes exactly over the glaciers, while real clouds are bright in SWIR and fail the NDSI-based snow test.
+    strict=True rejects every cloud-related flag (bits 1-4)."""
     qa = qa.astype(np.uint16)
     fill = (qa & 1) > 0
     if strict:
@@ -163,7 +166,8 @@ def landsat_clear(qa, strict=False):
     shadow = ((qa >> 4) & 1).astype(bool)
     cirrus_hi = ((qa >> 14) & 3) == 3
     snow = ((qa >> 5) & 1).astype(bool)
-    return ~fill & ~cloud_hi & ~(shadow & ~snow) & ~(cirrus_hi & ~snow)
+    snow_hi = ((qa >> 12) & 3) == 3
+    return ~fill & ~(cloud_hi & ~snow_hi) & ~(shadow & ~snow) & ~(cirrus_hi & ~snow)
 
 
 def s2_offset(item):
