@@ -200,11 +200,34 @@ def search_scenes(client, product, bbox, start, end, max_cloud=30, platforms=Non
     return [items[i] for i in order], [rows[i] for i in order]
 
 
-def composite(client, product, items, crs, transform, shape, progress=None, statistic="median", strip_rows=256, strict_mask=False):
-    """Cloud-masked composite. Returns (uint16 cube reflectance x 10 000, observation count, used scene ids).
+def _valid(product, qa):
+    """Inside the scene footprint (not fill / no data)."""
+    return qa != 0 if product == "Sentinel-2 L2A" else (qa.astype(np.uint16) & 1) == 0
 
-    Memory-safe: clear-sky masks are kept bit-packed and each band is composited in row strips, so dozens of scenes over a
-    whole basin fit in a few hundred MB."""
+
+def _reject_reasons(product, qa, rejected):
+    """Pixel counts of WHY valid pixels were rejected by the cloud mask (one scene)."""
+    if product == "Sentinel-2 L2A":
+        names = {1: "saturated", 3: "cloud shadow", 8: "cloud (medium)", 9: "cloud (high)", 10: "thin cirrus"}
+        return {n: int((rejected & (qa == c)).sum()) for c, n in names.items()}
+    q = qa.astype(np.uint16)
+    cloud_hi = (((q >> 3) & 1) == 1) & (((q >> 8) & 3) == 3)
+    cirrus_hi = ((q >> 14) & 3) == 3
+    shadow = ((q >> 4) & 1) == 1
+    other = rejected & ~cloud_hi & ~cirrus_hi & ~shadow
+    return {"cloud (high conf.)": int((rejected & cloud_hi).sum()), "cirrus (high conf.)": int((rejected & cirrus_hi & ~cloud_hi).sum()),
+            "cloud shadow": int((rejected & shadow & ~cloud_hi & ~cirrus_hi).sum()), "other flags": int(other.sum())}
+
+
+def composite(client, product, items, crs, transform, shape, progress=None, statistic="median", strip_rows=256, strict_mask=False,
+              fill_gaps=True, info=None):
+    """Cloud-masked composite. Returns (uint16 cube reflectance x 10 000, clear-observation count, used scene ids).
+
+    Memory-safe: masks are kept bit-packed and each band is composited in row strips, so dozens of scenes over a whole basin fit in a
+    few hundred MB. fill_gaps: pixels that were flagged in EVERY scene but observed at least once take the median of all valid
+    observations. Over glaciers and high peaks Fmask flags permanent ice as cloud or cirrus in every scene (above ~5 000 m the 1.38 um
+    cirrus band sees the ground), whereas real clouds move between acquisitions. `info` (a dict) receives the gap-fill mask and the
+    rejection reasons."""
     import contextlib
     import gc
     import warnings
@@ -215,25 +238,33 @@ def composite(client, product, items, crs, transform, shape, progress=None, stat
     H, W = shape
     p = PRODUCTS[product]
     col = p["collection"]
-    packed, used = [], []
+    packed, pvalid, used = [], [], []
     n_steps = len(items) * (len(p["bands"]) + 1)
     step = 0
     count = np.zeros(shape, "uint8")
+    seen = np.zeros(shape, bool)
+    reasons = {}
     for it in items:
         if p["qa"] not in it.get("assets", {}):
             continue
         qa, nod = _read(client.sign(col, it["assets"][p["qa"]]["href"]), crs, transform, shape, Resampling.nearest, "uint16")
-        clear = (s2_clear(qa) if product == "Sentinel-2 L2A" else landsat_clear(qa, strict_mask)) & ~nod
+        valid = _valid(product, qa) & ~nod
+        clear = (s2_clear(qa) if product == "Sentinel-2 L2A" else landsat_clear(qa, strict_mask)) & valid
+        for k, v in _reject_reasons(product, qa, valid & ~clear).items():
+            reasons[k] = reasons.get(k, 0) + v
         step += 1
         if progress:
-            progress(step / n_steps, f"mask {it['id']}: {100 * clear.mean():.0f}% clear")
-        if clear.any():
+            progress(step / n_steps, f"mask {it['id']}: {100 * clear.sum() / max(valid.sum(), 1):.0f}% of its footprint clear")
+        if valid.any():
             packed.append(np.packbits(clear, axis=1))
+            pvalid.append(np.packbits(valid, axis=1))
             count += clear.astype("uint8")
+            seen |= valid
             used.append(it)
-        del qa, nod, clear
-    if not used:
+        del qa, nod, clear, valid
+    if not count.any() and not (fill_gaps and seen.any()):
         raise ValueError("No cloud-free pixels in the selected scenes; widen the dates or raise the cloud limit.")
+    gaps = (count == 0) & seen if fill_gaps else np.zeros(shape, bool)
     cube = np.zeros((len(p["bands"]), H, W), "uint16")
     for b, band in enumerate(p["bands"]):
         with rasterio.Env(**GDAL_ENV), contextlib.ExitStack() as es:
@@ -249,24 +280,37 @@ def composite(client, product, items, crs, transform, shape, progress=None, stat
             for r0 in range(0, H, strip_rows):
                 h = min(strip_rows, H - r0)
                 win = Window(0, r0, W, h)
+                g = gaps[r0:r0 + h]
+                any_gap = bool(g.any())
                 stack = np.full((len(used), h, W), np.nan, "float32")
+                gstack = np.full((len(used), h, W), np.nan, "float32") if any_gap else None
                 for k, (it, vrt) in enumerate(zip(used, vrts)):
                     if vrt is None:
                         continue
                     m = np.unpackbits(packed[k][r0:r0 + h], axis=1, count=W).astype(bool)
-                    if not m.any():
+                    v = np.unpackbits(pvalid[k][r0:r0 + h], axis=1, count=W).astype(bool) & g if any_gap else None
+                    if not m.any() and (v is None or not v.any()):
                         continue
                     dn = vrt.read(1, window=win, out_dtype="float32")
-                    ok = m & (vrt.read_masks(1, window=win) > 0) & (dn > 0)
-                    stack[k] = np.where(ok, to_reflectance(product, dn, it), np.nan)
+                    good = (vrt.read_masks(1, window=win) > 0) & (dn > 0)
+                    refl = to_reflectance(product, dn, it)
+                    stack[k] = np.where(m & good, refl, np.nan)
+                    if v is not None:
+                        gstack[k] = np.where(v & good, refl, np.nan)
                 with np.errstate(all="ignore"), warnings.catch_warnings():
-                    warnings.simplefilter("ignore", RuntimeWarning)   # pixels never clear (or outside the footprints) stay NaN
-                    agg = np.nanmedian(stack, axis=0) if statistic == "median" else np.nanmean(stack, axis=0)
+                    warnings.simplefilter("ignore", RuntimeWarning)   # pixels never observed (or outside the footprints) stay NaN
+                    red = np.nanmedian if statistic == "median" else np.nanmean
+                    agg = red(stack, axis=0)
+                    if any_gap:
+                        agg = np.where(g, red(gstack, axis=0), agg)
                 cube[b, r0:r0 + h] = np.where(np.isfinite(agg), np.clip(np.round(agg * 10000), 1, 65534), 0).astype("uint16")
+                del stack, gstack
         gc.collect()
         step += len(used)
         if progress:
             progress(min(step / n_steps, 1.0), f"band {band} composited from {len(used)} scenes")
+    if info is not None:
+        info.update(gap_filled=gaps, reject_reasons=reasons)
     return cube, count, [it["id"] for it in used]
 
 
@@ -321,7 +365,7 @@ def single_asset(client, collection, asset, bbox, crs, transform, shape, resampl
 
 
 def download_composite(store, client, product, bbox=None, start=None, end=None, max_cloud=30, n_scenes=6, res=None, template=None,
-                       output_name=None, progress=None, statistic="median", platforms=None, clip=None, strict_mask=False):
+                       output_name=None, progress=None, statistic="median", platforms=None, clip=None, strict_mask=False, fill_gaps=True):
     p = PRODUCTS[product]
     tpl = store.get(template) if template else None
     if tpl is not None:
@@ -333,8 +377,13 @@ def download_composite(store, client, product, bbox=None, start=None, end=None, 
     if not items:
         raise ValueError("No scenes found: widen the dates, raise the cloud limit or check the area.")
     sel, tiles = select_scenes(items, rows, int(n_scenes))
-    cube, count, used = composite(client, product, sel, crs, transform, shape, progress, statistic, strict_mask=strict_mask)
+    info = {}
+    cube, count, used = composite(client, product, sel, crs, transform, shape, progress, statistic, strict_mask=strict_mask,
+                                  fill_gaps=fill_gaps, info=info)
     inside = clip_mask(clip, crs, transform, shape)
+    filled = info["gap_filled"] & inside
+    rej = info["reject_reasons"]
+    tot = sum(rej.values()) or 1
     cube[:, ~inside] = 0
     count = np.where(inside, count, 255).astype("uint8")
     name = output_name or f"{'S2' if product.startswith('Sentinel') else 'Landsat'}_{start[:4]}_{end[:4]}_composite.tif"
@@ -343,15 +392,29 @@ def download_composite(store, client, product, bbox=None, start=None, end=None, 
     cname = name.rsplit(".", 1)[0] + "_obs_count.tif"
     store.outputs[cname] = stack_bytes(count[None], crs, transform, ["valid observations"], nodata=255)
     covered = (count > 0) & inside
-    return dict(output=name, clipped=clip is not None, area_km2=float(inside.sum() * abs(transform.a * transform.e) / 1e6), observation_count=cname, product=product, preset=p["preset"], crs=crs.to_string(), resolution_m=abs(transform.a),
+    n_in = max(int(inside.sum()), 1)
+    clear_pct = float(covered.sum() / n_in * 100)
+    filled_pct = float(filled.sum() / n_in * 100)
+    data_pct = clear_pct + filled_pct
+    reasons = {k: round(100 * v / tot, 1) for k, v in sorted(rej.items(), key=lambda kv: -kv[1]) if v}
+    top = ", ".join(f"{k} {v:.0f}%" for k, v in list(reasons.items())[:3])
+    return dict(output=name, clipped=clip is not None, area_km2=float(inside.sum() * abs(transform.a * transform.e) / 1e6), observation_count=cname,
+                product=product, preset=p["preset"], crs=crs.to_string(), resolution_m=abs(transform.a),
                 size=[int(shape[1]), int(shape[0])], bbox_lonlat=[round(v, 5) for v in bbox], scenes_found=len(items), scenes_used=used,
                 footprint_tiles=tiles, scenes_per_tile=int(n_scenes), mask="strict" if strict_mask else "snow-aware",
-                scenes_table=rows[:50], pixels_with_data_pct=float(covered.sum() / max(inside.sum(), 1) * 100),
+                scenes_table=rows[:50], pixels_with_data_pct=data_pct, clear_pct=clear_pct, gap_filled_pct=filled_pct,
+                mask_rejections_pct=reasons,
                 mean_observations=float(count[covered].mean()) if covered.any() else 0,
                 note=("Stored as surface reflectance x 10 000 (uint16, 0 = no data). In the Classification tab choose this file and the preset "
-                      f"'{p['preset']}'. Scenes were chosen per footprint tile ({', '.join(tiles)}). ")
-                + (f"WARNING: only {covered.sum() / max(inside.sum(), 1) * 100:.0f}% of the area has a clear observation: widen the dates, raise the "
-                   "cloud limit or the scenes per tile." if covered.sum() < 0.9 * inside.sum() else "Pixels with 0 observations were cloudy in every scene."))
+                      f"'{p['preset']}'. Scenes were chosen per footprint tile ({', '.join(tiles)}). "
+                      f"{clear_pct:.1f}% of the area has at least one clear observation"
+                      + (f"; {filled_pct:.1f}% was flagged in every scene and gap-filled with the median of all valid observations "
+                         "(observation count 0 in the _obs_count layer). This is typical over glaciers and high peaks, where the cloud mask "
+                         "confuses permanent ice and bright rock with cloud or cirrus; check these pixels before using them for training. "
+                         if filled_pct >= 0.05 else ". ")
+                      + (f"Mask rejections: {top}. " if top else ""))
+                + (f"WARNING: only {data_pct:.0f}% of the area has data: widen the dates, raise the cloud limit or the scenes per tile."
+                   if data_pct < 90 else ""))
 
 
 def download_dem(store, client, bbox=None, template=None, res=30, output_name="copernicus_dem_30m.tif", clip=None):

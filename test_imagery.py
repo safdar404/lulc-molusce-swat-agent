@@ -196,3 +196,32 @@ def test_scene_selection_covers_every_tile():
     sel, tiles = I.select_scenes(items, rows, 2)
     assert len(tiles) == 3 and len(sel) == 6
     assert sorted({s["id"].split("_")[0] for s in sel}) == tiles
+
+
+def test_gap_fill_for_persistently_flagged_glacier(tmp_path):
+    """v1.4.3: pixels flagged in EVERY scene (glacier ice that Fmask calls cloud / cirrus) are filled from all valid observations,
+    reported separately, and the rejection reasons are counted."""
+    crs, tr, shape = I.target_grid(I.bbox_from_center(LON, LAT, 2), 30)
+    H, W = shape
+    src_tr = from_origin(tr.c - 300, tr.f + 300, 30, 30)
+    Hs, Ws = H + 20, W + 20
+    items = []
+    for k in range(3):
+        qa = np.full((Hs, Ws), 21824, "uint16")                 # clear land
+        qa[:, : Ws // 2] = 8 + (3 << 8) + (3 << 14)             # left half: high-confidence cloud + cirrus in every scene ("glacier")
+        assets = {"qa_pixel": {"href": _cog(tmp_path / f"l{k}_qa.tif", qa, src_tr)}}
+        for b in I.PRODUCTS["Landsat 4-9 C2 L2"]["bands"]:
+            assets[b] = {"href": _cog(tmp_path / f"l{k}_{b}.tif", np.full((Hs, Ws), 20000 + 1000 * k, "float32"), src_tr)}
+        items.append(dict(id=f"LC09_{k}", properties={"datetime": f"2025-08-0{k + 1}T05:00:00Z", "eo:cloud_cover": 5.0 + k,
+                                                      "landsat:wrs_path": "150", "landsat:wrs_row": "035", "platform": "landsat-9"}, assets=assets))
+    client = FakeClient({"landsat-c2-l2": items})
+    bb = I.bbox_from_center(LON, LAT, 2)
+    s = Session()
+    r = I.download_composite(s.store, client, "Landsat 4-9 C2 L2", bb, "2025-08-01", "2025-09-30", 50, 4, output_name="g.tif")
+    assert r["pixels_with_data_pct"] == pytest.approx(100, abs=0.5)
+    assert 40 < r["gap_filled_pct"] < 60 and r["clear_pct"] + r["gap_filled_pct"] == pytest.approx(r["pixels_with_data_pct"])
+    assert list(r["mask_rejections_pct"])[0] == "cloud (high conf.)" and "gap-filled" in r["note"]
+    g = s.store.add("g", s.store.outputs["g.tif"], register=False)
+    np.testing.assert_allclose(g.bands[0][~g.mask] / 1e4, 21000 * 2.75e-5 - 0.2, atol=2e-4)   # median of the three scenes everywhere
+    r2 = I.download_composite(s.store, client, "Landsat 4-9 C2 L2", bb, "2025-08-01", "2025-09-30", 50, 4, output_name="n.tif", fill_gaps=False)
+    assert r2["gap_filled_pct"] == 0 and r2["pixels_with_data_pct"] == pytest.approx(r["clear_pct"])

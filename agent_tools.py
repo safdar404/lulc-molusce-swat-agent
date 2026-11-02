@@ -529,13 +529,14 @@ def _ss(ctx, product, start, end, max_cloud=30, platforms=None, bbox=None, cente
       {**AOI, "product": S("string", "Sensor", enum=list(imagery.PRODUCTS)), "start": STR("YYYY-MM-DD"), "end": STR("YYYY-MM-DD"),
        "max_cloud": S("number", "Max scene cloud % (default 30)"), "n_scenes": S("integer", "Least-cloudy scenes per footprint tile (default 4)"),
        "strict_mask": S("boolean", "Reject every Landsat cloud flag (default false = snow-aware mask)"),
+       "fill_gaps": S("boolean", "Fill pixels flagged in every scene (glaciers, high peaks) with the median of all valid observations (default true)"),
        "resolution": S("number", "Pixel size in metres"), "platforms": S("array", "Landsat platforms", items={"type": "string"}), "output_name": STR("Output name")},
       ["product", "start", "end"])
 def _dc(ctx, product, start, end, max_cloud=30, n_scenes=4, resolution=None, platforms=None, output_name=None, bbox=None, center_lon=None, center_lat=None,
-        size_km=None, template=None, vector=None, clip_vector=None, strict_mask=False):
+        size_km=None, template=None, vector=None, clip_vector=None, strict_mask=False, fill_gaps=True):
     res = imagery.download_composite(ctx.store, _client(ctx), product, _bbox(bbox, center_lon, center_lat, size_km, template, vector, ctx), start, end, max_cloud,
                                      n_scenes, resolution, template, output_name, platforms=platforms, clip=_vec(ctx, clip_vector) if clip_vector else None,
-                                     strict_mask=bool(strict_mask))
+                                     strict_mask=bool(strict_mask), fill_gaps=bool(fill_gaps))
     _register(ctx, res["output"], res["observation_count"])
     return res
 

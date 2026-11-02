@@ -87,8 +87,13 @@ def render(ctx, R):
     if product.startswith("Landsat"):
         plats = c[3].multiselect("Platforms", ["landsat-4", "landsat-5", "landsat-7", "landsat-8", "landsat-9"], default=["landsat-8", "landsat-9"], key="img_plat",
                                  help="Use Landsat 5 for 1984-2012 and 7 for 1999-2022 (SLC-off gaps after 2003 are masked).")
-    strict = st.checkbox("Strict cloud mask (reject every cloud flag, incl. buffers)", False, key="img_strict",
-                         help="Off = snow-aware Landsat mask: keeps bright snow and glacier ice that Fmask often flags as medium-confidence cloud.")
+    cc = st.columns(2)
+    strict = cc[0].checkbox("Strict cloud mask (reject every cloud flag, incl. buffers)", False, key="img_strict",
+                            help="Off = snow-aware Landsat mask: keeps bright snow and glacier ice that Fmask often flags as medium-confidence cloud.")
+    fill = cc[1].checkbox("Fill pixels flagged in every scene (glaciers, high peaks)", True, key="img_fill",
+                          help="Pixels the cloud mask rejected in EVERY scene take the median of all valid observations. Over glaciers and peaks "
+                               "above ~5 000 m Fmask flags permanent ice as cloud or cirrus in every scene; real clouds move between dates. "
+                               "Filled pixels have observation count 0 in the _obs_count layer.")
     out = st.text_input("Output name", f"{'S2' if product.startswith('Sentinel') else 'Landsat'}_{start.year}_{end.year}_composite.tif", key=f"img_out_{product}_{start}_{end}")
     c = st.columns(2)
     if c[0].button("🔎 Search scenes"):
@@ -110,7 +115,7 @@ def render(ctx, R):
         bar = st.progress(0.0, "Starting…")
         try:
             res_ = I.download_composite(ctx.store, _client(), product, bbox, start.isoformat(), end.isoformat(), cloud, int(nsc), res, template, out,
-                                        progress=lambda f, msg: bar.progress(float(f), msg), statistic=stat, platforms=plats, clip=clip, strict_mask=strict)
+                                        progress=lambda f, msg: bar.progress(float(f), msg), statistic=stat, platforms=plats, clip=clip, strict_mask=strict, fill_gaps=fill)
             ctx.store.add(res_["output"], ctx.store.outputs[res_["output"]])
             ctx.store.add(res_["observation_count"], ctx.store.outputs[res_["observation_count"]])
             ctx.record("download_composite", {"product": product, "bbox": bbox, "template": template, "start": str(start), "end": str(end),
@@ -128,7 +133,8 @@ def render(ctx, R):
         m = st.columns(4)
         m[0].metric("Scenes used", len(r["scenes_used"]), f"{len(r.get('footprint_tiles', []))} tile(s), {r['scenes_found']} found", delta_color="off")
         m[1].metric("Size", f"{r['size'][0]} × {r['size'][1]} px", f"{r['resolution_m']:.0f} m", delta_color="off")
-        m[2].metric("Area with data", f"{r['pixels_with_data_pct']:.1f}%")
+        m[2].metric("Area with data", f"{r['pixels_with_data_pct']:.1f}%",
+                    f"{r.get('clear_pct', r['pixels_with_data_pct']):.1f}% clear + {r.get('gap_filled_pct', 0):.1f}% gap-filled", delta_color="off")
         m[3].metric("Mean clear observations", f"{r['mean_observations']:.1f}")
         if r["output"] in ctx.store.rasters:
             _rgb(ctx.store.get(r["output"]))
@@ -136,6 +142,9 @@ def render(ctx, R):
         if r["pixels_with_data_pct"] < 90:
             st.warning(f"Only {r['pixels_with_data_pct']:.0f}% of the area has a clear observation. Widen the dates, raise the cloud limit or the "
                        "scenes per tile.")
+        if r.get("mask_rejections_pct"):
+            st.caption("Why pixels were rejected by the cloud mask (share of all rejected scene-pixels): "
+                       + ", ".join(f"{k} {v:.0f}%" for k, v in r["mask_rejections_pct"].items()))
         st.success(f"Added to the session layers. In 🛰️ Classification choose **{r['output']}** with preset **{r['preset']}**.")
         st.caption(r["note"])
 

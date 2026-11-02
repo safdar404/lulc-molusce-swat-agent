@@ -1,4 +1,12 @@
 # Changelog
+## 1.4.4
+- **Gap fill for persistently flagged pixels** (on by default): pixels that the cloud mask rejected in EVERY scene but that were observed
+  take the median of all valid observations, reported separately as "gap-filled" (observation count 0). With the 1.4.3 rule alone the
+  Astore composite stayed at 81.4 %: above ~5 000 m the 1.38 um cirrus band sees the ground, so Fmask flags glacier ice as cirrus/cloud
+  in every scene, while real clouds move between acquisitions.
+- **Mask diagnostics**: each composite reports why pixels were rejected (high-confidence cloud, cirrus, shadow, other flags).
+- Agent tool `download_composite` gains `fill_gaps`; the report states the clear and gap-filled shares.
+
 ## 1.4.3
 - Landsat snow-aware mask keeps pixels with HIGH snow/ice confidence (QA_PIXEL bits 12-13) even when Fmask also flags them as
   high-confidence cloud. In the live Astore run the composite reached 81 % coverage and the remaining holes were exactly the glaciers,

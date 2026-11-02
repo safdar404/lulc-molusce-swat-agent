@@ -170,7 +170,10 @@ def _b_comp(ctx, a, r):
     blocks = [("p", f"A cloud-masked {r.get('product')} composite was built from the {len(r['scenes_used'])} least-cloudy of {r['scenes_found']} scenes "
                     f"(Microsoft Planetary Computer) on a {r['resolution_m']:.0f} m grid ({r['crs']}). Clouds, cloud shadows and cirrus were masked per pixel "
                     "before taking the per-band median of surface reflectance; "
-                    f"{r['pixels_with_data_pct']:.1f}% of the area has at least one clear observation (mean {r['mean_observations']:.1f}).")]
+                    f"{r.get('clear_pct', r['pixels_with_data_pct']):.1f}% of the area has at least one clear observation (mean {r['mean_observations']:.1f})."
+                    + (f" A further {r['gap_filled_pct']:.1f}% was rejected by the cloud mask in every scene (typically glacier ice and high peaks "
+                       "that Fmask confuses with cloud or cirrus) and was filled with the median of all valid observations."
+                       if r.get("gap_filled_pct", 0) >= 0.05 else ""))]
     if len(t):
         blocks.append(("table", t, "Scenes considered for the composite (least cloudy first)"))
     return blocks, []
