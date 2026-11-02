@@ -1,6 +1,6 @@
 """Audited, read-only tools shared by the Streamlit UI and the LLM agent. Nothing touches the file system."""
 import json
-import changeops, classify, hydro, knowledge, patternops, rasterops, simulate
+import changeops, classify, hydro, knowledge, patternops, rasterops, simulate, swatlink
 
 REG = {}
 S = lambda t, d, **k: dict(type=t, description=d, **k)
@@ -335,6 +335,73 @@ def _sim(ctx, map_from, map_to, year_from, year_to, year_target, validate_agains
        "simulated": S("array", "Simulated maps", items={"type": "string"})}, ["initial", "observed", "simulated"])
 def _vs(ctx, initial, observed, simulated):
     return simulate.validate(ctx.store, initial, observed, simulated)
+
+
+# ---------------- v1.0.0: SWAT+ link ----------------
+LAYERS_FIRST_BASE = S("array", "LULC maps; the first is the baseline", items={"type": "string"})
+LABELS = S("object", "{class code: class name}, used to suggest SWAT+ codes")
+SWATCODES = S("object", "{class code: SWAT+ code}, e.g. {\"1\": \"WATR\"}. Codes: " + ", ".join(swatlink.SWAT_TABLE))
+
+
+def _table(ctx, name):
+    if name not in ctx.tables:
+        raise ValueError(f"Table not loaded: {name}")
+    return ctx.tables[name]
+
+
+@tool("swat_landuse_lookup", "Map LULC classes to SWAT+ land-use codes (suggested from class names), return the QSWAT+ lookup CSV and area per code for each map.",
+      {"layers": LAYERS_FIRST_BASE, "labels": LABELS, "swat_codes": SWATCODES}, ["layers"])
+def _lk(ctx, layers, labels=None, swat_codes=None):
+    return swatlink.swat_lookup(ctx.store, layers, labels, swat_codes)
+
+
+@tool("curve_number_runoff", "SCS Curve Number runoff for each LULC map (scenario): CN from SWAT+ code and hydrologic soil group (raster 1-4 = A-D, or uniform), optional SWAT "
+      "slope adjustment from a DEM, design storm and/or a daily rainfall table; writes CN and runoff GeoTIFFs and compares scenarios with the first map.",
+      {"layers": LAYERS_FIRST_BASE, "labels": LABELS, "swat_codes": SWATCODES, "hsg_layer": STR("Hydrologic soil group raster"),
+       "hsg_uniform": S("string", "Uniform HSG if no raster", enum=list("ABCD")), "dem": STR("DEM for slope adjustment"), "storm_mm": S("number", "Design storm depth (mm)"),
+       "rain_table": STR("Daily rainfall table"), "date_column": STR("Date column"), "rain_column": STR("Rainfall column (mm)"),
+       "lam": S("number", "Ia/S ratio 0.2 or 0.05"), "cn_overrides": S("object", "{code: [CN_A, CN_B, CN_C, CN_D]}")}, ["layers"])
+def _cn(ctx, layers, labels=None, swat_codes=None, hsg_layer=None, hsg_uniform="B", dem=None, storm_mm=50.0, rain_table=None, date_column=None,
+        rain_column=None, lam=0.2, cn_overrides=None):
+    rt = _table(ctx, rain_table) if rain_table else None
+    res = swatlink.curve_number_runoff(ctx.store, layers, labels, swat_codes, hsg_layer, hsg_uniform, dem, storm_mm, rt, date_column, rain_column, lam, cn_overrides)
+    _register(ctx, *res["outputs"])
+    return res
+
+
+@tool("rusle_erosion", "RUSLE soil loss (t/ha/yr) for each LULC map: R, K, P as constants or rasters, LS from a DEM (fixed slope length or D8 flow accumulation), C from the "
+      "SWAT+ code; totals, severity classes and per-land-use loss, compared with the first map.",
+      {"layers": LAYERS_FIRST_BASE, "dem": STR("DEM"), "R": S("number", "Rainfall erosivity (or give R_layer)"), "R_layer": STR("R raster"),
+       "K": S("number", "Soil erodibility (or K_layer)"), "K_layer": STR("K raster"), "P": S("number", "Support practice (default 1)"), "P_layer": STR("P raster"),
+       "labels": LABELS, "swat_codes": SWATCODES, "ls_method": S("string", "LS method", enum=["slope_length", "flow_accumulation"]),
+       "slope_length": S("number", "Slope length m (default 50)"), "max_length": S("number", "Max flow length m (default 300)"),
+       "c_overrides": S("object", "{code: C}")}, ["layers", "dem"])
+def _ru(ctx, layers, dem, R=500.0, K=0.03, P=1.0, R_layer=None, K_layer=None, P_layer=None, labels=None, swat_codes=None, ls_method="slope_length",
+        slope_length=50.0, max_length=300.0, c_overrides=None):
+    R = R_layer or R
+    K = K_layer or K
+    P = P_layer or P
+    res = swatlink.rusle(ctx.store, layers, dem, R, K, P, labels, swat_codes, ls_method, slope_length, max_length, c_overrides)
+    _register(ctx, *res["outputs"])
+    return res
+
+
+@tool("flow_evaluation", "Evaluate SWAT+ streamflow against observations: NSE, KGE, R2, PBIAS, RSR with Moriasi ratings, flow-duration-curve signatures (FHV, FLV, FMS), "
+      "daily/monthly/annual aggregation, warm-up removal and calibration/validation split.",
+      {"observed_table": STR("Observed table"), "simulated_table": STR("Simulated table"), "date_column": STR("Date column"), "observed_column": STR("Observed column"),
+       "simulated_column": STR("Simulated column"), "split_date": STR("First date of validation period"), "step": S("string", "Time step", enum=["daily", "monthly", "annual"]),
+       "warmup_end": STR("Drop dates before this")}, ["observed_table", "simulated_table", "date_column", "observed_column", "simulated_column"])
+def _fe(ctx, observed_table, simulated_table, date_column, observed_column, simulated_column, split_date=None, step="daily", warmup_end=None):
+    return swatlink.flow_evaluation(_table(ctx, observed_table), _table(ctx, simulated_table), date_column, observed_column, simulated_column,
+                                    split_date, step, warmup_end)
+
+
+@tool("lulc_flow_attribution", "Compare two SWAT+ runs that differ only in the LULC map: change in mean flow, high flow (Q5), median and low flow (Q95), annual means and FDC.",
+      {"baseline_table": STR("Baseline run table"), "scenario_table": STR("Scenario run table"), "date_column": STR("Date column"),
+       "baseline_column": STR("Baseline flow column"), "scenario_column": STR("Scenario flow column")},
+      ["baseline_table", "scenario_table", "date_column", "baseline_column", "scenario_column"])
+def _at(ctx, baseline_table, scenario_table, date_column, baseline_column, scenario_column):
+    return swatlink.lulc_attribution(_table(ctx, baseline_table), _table(ctx, scenario_table), date_column, baseline_column, scenario_column)
 
 
 def run_tool(ctx, name, args):

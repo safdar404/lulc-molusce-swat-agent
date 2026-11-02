@@ -241,13 +241,14 @@ def apply_theme():
 
 
 def hero(version):
-    chips = ["MOLUSCE geometry QA", "Area & transitions", "Accuracy & kappa", "Hindcast FoM", "NSE · PBIAS · KGE", "AI agent"]
+    chips = ["RF / SVM classification", "Olofsson accuracy", "Intensity analysis", "Landscape metrics", "Gi* hotspots",
+             "Markov-CA scenarios", "Hindcast FoM", "SWAT+ · CN · RUSLE", "AI agent"]
     st.markdown(f"""
 <div class="hero">
   <img src="{logo_data_uri()}" alt="LULC Agent logo"/>
   <div style="position:relative;z-index:1">
     <h1>LULC · MOLUSCE · SWAT+ Agent</h1>
-    <p>Audited land-cover change, simulation validation and hydrology checks, with an AI agent that uses the same tools. v{version}</p>
+    <p>Classify, validate, explain, simulate and link land-cover change to SWAT+ hydrology, with an AI agent that uses the same audited tools. v{version}</p>
     <div class="chips">{''.join(f'<span class="chip">{c}</span>' for c in chips)}</div>
   </div>
 </div>""", unsafe_allow_html=True)

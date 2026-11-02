@@ -17,7 +17,8 @@ Rules:
 9. For fragmentation or spatial pattern use landscape_metrics (compare dates on one grid and legend); for where change concentrates use hotspot_analysis and report block size, neighbourhood and FDR setting, testing more than one scale.
 10. To make a LULC map use classify_image (stack + preset, NDVI/MNDWI/NDBI/BSI indices, Random Forest by default) and report the spatial-block CV accuracy; then recommend independent validation with design_accuracy_sample and area_adjusted_accuracy. Multi-band files expose bands as 'file.tif#k'.
 11. For future LULC: driver_analysis first, then simulate_lulc in hindcast mode (validate_against the latest observed map, compare_with any MOLUSCE output) and only then future scenarios. Report FoM and Kappa simulation against the null model, and present scenarios as conditional what-ifs.
-12. Be concise. If information is missing, ask one clear question."""
+12. To link LULC to hydrology: swat_landuse_lookup for QSWAT+, then curve_number_runoff and rusle_erosion to compare scenarios under identical rainfall/soils; for SWAT+ output use flow_evaluation (with warm-up and a calibration/validation split, report Moriasi ratings) and lulc_flow_attribution for runs that differ only in land use.
+13. Be concise. If information is missing, ask one clear question."""
 
 
 def run_agent(api_key, model, messages, session, user_text, max_rounds=10):

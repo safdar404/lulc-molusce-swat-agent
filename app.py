@@ -9,7 +9,7 @@ import importlib  # noqa: E402
 
 # Streamlit re-runs app.py when it changes but keeps helper modules cached. After a multi-file update that leaves
 # a stale mix (e.g. "cannot import name ... from 'agent'"), so reload every local module whose file changed.
-_LOCAL_MODULES = ["metrics", "knowledge", "store", "rasterops", "olofsson", "intensity", "changeops", "landscape", "hotspot", "patternops", "classify", "simulate", "hydro", "session", "agent_tools", "agent", "ui", "advanced_tabs", "pattern_tab", "classify_tab", "simulate_tab", "cartography", "live", "canvas_tab"]  # dependency order
+_LOCAL_MODULES = ["metrics", "knowledge", "store", "rasterops", "olofsson", "intensity", "changeops", "landscape", "hotspot", "patternops", "classify", "simulate", "swatlink", "hydro", "session", "agent_tools", "agent", "ui", "advanced_tabs", "pattern_tab", "classify_tab", "simulate_tab", "swat_tab", "cartography", "live", "canvas_tab"]  # dependency order
 for _name in _LOCAL_MODULES:
     _mod = sys.modules.get(_name)
     if _mod is not None and getattr(_mod, "__file__", None):
@@ -28,17 +28,17 @@ st.set_page_config(page_title="LULC-MOLUSCE-SWAT+ Agent", page_icon=ui.page_icon
 ui.apply_theme()
 
 try:
-    import advanced_tabs, canvas_tab, classify_tab, hydro, knowledge, pattern_tab, simulate_tab
+    import advanced_tabs, canvas_tab, classify_tab, hydro, knowledge, pattern_tab, simulate_tab, swat_tab
     from agent import DEFAULT_MODEL, friendly_error, offline_analysis, run_agent
     from session import Session
-    __version__ = "0.9.0"
+    __version__ = "1.0.0"
     for _name in _LOCAL_MODULES:
         _mod = sys.modules.get(_name)
         if _mod is not None and getattr(_mod, "__file__", None):
             _mod._file_mtime = Path(_mod.__file__).stat().st_mtime
 except ImportError as e:  # most common deployment mistake: folders flattened or missing dependencies
     st.error(f"Cannot import the analysis core: {e}")
-    st.markdown("Check that all .py files from the flat package (metrics, knowledge, store, rasterops, olofsson, intensity, changeops, landscape, hotspot, patternops, classify, simulate, hydro, session, agent_tools, agent, advanced_tabs, pattern_tab, classify_tab, simulate_tab) are in the same folder as app.py and that "
+    st.markdown("Check that all .py files from the flat package (metrics, knowledge, store, rasterops, olofsson, intensity, changeops, landscape, hotspot, patternops, classify, simulate, swatlink, hydro, session, agent_tools, agent, advanced_tabs, pattern_tab, classify_tab, simulate_tab, swat_tab) are in the same folder as app.py and that "
                 "`requirements.txt` was installed. ")
     st.stop()
 
@@ -110,7 +110,7 @@ def download_outputs(where):
 
 
 tabs = st.tabs(["📚 Guide", "🛰️ Live map canvas", "🔍 Inspect & geometry", "🛰️ Classification", "🗺️ Area & transitions", "📈 Intensity analysis", "🧩 Landscape & hotspots", "🔮 Drivers & scenarios", "🎯 Accuracy",
-                "📏 Area-adjusted accuracy", "⏪ Hindcast", "💧 Hydrology", "🤖 Agent", "📝 Log"])
+                "📏 Area-adjusted accuracy", "⏪ Hindcast", "💧 Hydrology", "🌊 SWAT+ link", "🤖 Agent", "📝 Log"])
 
 # ---------------- Guide ----------------
 with tabs[0]:
@@ -276,8 +276,12 @@ with tabs[11]:
                 st.line_chart(hydro.align(ctx.tables[ot], ctx.tables[stb], dcol, oc, sc, s0 or None, s1 or None).set_index("date")[["obs", "sim"]], color=["#06B6D4", "#EC4899"])
                 st.caption(res["caution"])
 
-# ---------------- Agent ----------------
+# ---------------- SWAT+ link ----------------
 with tabs[12]:
+    swat_tab.render(ctx, R)
+
+# ---------------- Agent ----------------
+with tabs[13]:
     ui.section("🤖", "Research agent", "Calls the same audited tools as the other tabs and evaluates MOLUSCE / QSWAT+ results you bring from QGIS.", "violet")
     for role, text in st.session_state.chat:
         is_user = role not in ("assistant", "tool", "error")
@@ -303,7 +307,7 @@ with tabs[12]:
         st.rerun()
 
 # ---------------- Log ----------------
-with tabs[13]:
+with tabs[14]:
     ui.section("📝", "Processing log", "Every tool call in the manual's template: date, input, tool version, parameters, output, note", "green")
     df = ctx.log_df()
     st.dataframe(df, hide_index=True)

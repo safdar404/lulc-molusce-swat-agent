@@ -1,4 +1,18 @@
 # Changelog
+## 1.0.0
+- New **🌊 SWAT+ link** tab (`swatlink.py`, `swat_tab.py`), which closes the workflow from imagery to hydrology.
+  - **LULC → SWAT+ codes**: editable class table with codes suggested from class names, a QSWAT+ landuse lookup CSV
+    (`LANDUSE_ID,SWAT_CODE`) and area per SWAT+ code for every map or scenario.
+  - **Curve Number runoff** per scenario: CN from SWAT+ code and hydrologic soil group (raster or uniform), SWAT slope adjustment of
+    CN2 (Williams 1995), Ia = 0.2 S or 0.05 S (Hawkins et al. 2002), design storm and daily rainfall series, CN and runoff GeoTIFFs,
+    change versus the baseline map. Editable TR-55 Curve Number table.
+  - **RUSLE erosion** per scenario: R, K, P as constants or rasters, LS from a DEM with a fixed slope length or D8 flow accumulation,
+    C from the SWAT+ code (editable), severity classes, soil loss by land use and soil-loss GeoTIFFs.
+  - **Streamflow evaluation**: NSE, KGE, R², PBIAS and RSR with Moriasi et al. (2007, 2015) ratings, Yilmaz et al. (2008) flow-duration
+    signatures (FHV, FLV, FMS), warm-up removal, calibration / validation split, daily / monthly / annual aggregation and an FDC chart.
+  - **LULC impact between two SWAT+ runs** (same climate and parameters): change in mean, high (Q5), median and low (Q95) flow, and FDCs.
+- Agent: new tools `swat_landuse_lookup`, `curve_number_runoff`, `rusle_erosion`, `flow_evaluation`, `lulc_flow_attribution`.
+- Header updated to show the full workflow.
 ## 0.9.0
 - New **🔮 Drivers & scenarios** tab (`simulate.py`, `simulate_tab.py`).
   - **Driver layers**: distance to a class (recomputed from each base map), distance to features such as roads or rivers, slope from a
