@@ -7,6 +7,7 @@
 - **Layers & files table of contents** in the sidebar, like a GIS layer panel: every raster (size, bands, pixel size, CRS, % valid),
   generated output, vector layer (features, geometry, CRS), table (rows × cols) and a running or failed background job. It is drawn
   at the end of each run, so outputs made in that run appear straight away.
+- The main card wraps (globe above the text) when the page is narrow, e.g. with the sidebar open on a laptop.
 
 ## 1.4.7
 - Fix: sessions open during the 1.4.6 redeploy crashed with `AttributeError` because their composite job object (1.4.5) had no id.

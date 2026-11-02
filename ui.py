@@ -266,6 +266,8 @@ html, body, [class*="css"], .stMarkdown, button, input, textarea { font-family: 
 .cls em { position:absolute; left:0; font-style:normal; color:#FDE047; opacity:0; animation: cls 12s infinite; }
 @keyframes cls { 0% { opacity:0; transform:translateY(4px); } 3%,14% { opacity:1; transform:none; } 17%,100% { opacity:0; } }
 @keyframes blink { 50% { opacity:0; } }
+.hero { flex-wrap:wrap; justify-content:center; }
+.hero > .hero-text { flex:1 1 340px; min-width:0; }
 .tele { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px; position:relative; z-index:1; }
 .tele span { font: 700 .78rem/1.1 ui-monospace, SFMono-Regular, Menlo, monospace; color:#fff; padding:5px 10px; border-radius:8px;
   background: rgba(15,23,42,.38); border:1px solid rgba(165,243,252,.45); box-shadow: inset 0 0 12px rgba(103,232,249,.18); }
@@ -352,7 +354,7 @@ def hero(version, status=None):
     st.markdown(f"""
 <div class="hero">
   {globe_html()}
-  <div style="position:relative;z-index:1">
+  <div class="hero-text" style="position:relative;z-index:1">
     <h1>LULC · MOLUSCE · SWAT+ Agent</h1>
     <p>Classify, validate, explain, simulate and link land-cover change to SWAT+ hydrology, with an AI agent that uses the same audited tools. v{version}</p>
     {tele}
