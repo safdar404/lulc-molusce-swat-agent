@@ -167,3 +167,28 @@ def test_live_jobs_and_map_layout():
 def test_scalebar_nice_numbers():
     import cartography
     assert cartography._nice(3700) == 2500 and cartography._nice(0.9) == 0.5
+
+
+def test_layers_toc_items():
+    """v1.4.8: the sidebar table of contents lists every loaded raster, output, vector, table and an active job."""
+    import types
+    import geopandas as gpd
+    from shapely.geometry import Point
+    import ui
+    s = Session()
+    prof = dict(driver="GTiff", width=4, height=3, count=1, dtype="uint8", crs=CRS.from_epsg(32643),
+                transform=from_origin(500000, 4000000, 30, 30), nodata=0)
+    s.store.add("lulc_2020.tif", to_geotiff_bytes(prof, np.array([[0, 1, 2, 3]] * 3), "uint8", 0))
+    s.store.outputs["change.tif"] = b"x" * 2000
+    s.tables["points.csv"] = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+    s.vectors["basin"] = gpd.GeoDataFrame(geometry=[Point(0, 0)], crs=4326)
+    job = types.SimpleNamespace(name="composite", running=True, progress=0.4, message="Scene 3/11", error=None)
+    g = {title: rows for _, title, rows in ui.toc_items(s, job)}
+    r = g["Raster layers"][0]
+    assert r["name"] == "lulc_2020.tif" and r["tag"] == "upload"
+    assert "4×3 px" in r["detail"] and "30 m" in r["detail"] and "EPSG:32643" in r["detail"] and "75% valid" in r["detail"]
+    assert g["Generated outputs (not loaded as layers)"][0]["name"] == "change.tif"
+    assert "1 feature ·" in g["Vector layers"][0]["detail"] and "EPSG:4326" in g["Vector layers"][0]["detail"]
+    assert g["Tables"][0]["detail"] == "2 rows × 2 cols"
+    assert g["Background jobs"][0]["tag"] == "running" and "40%" in g["Background jobs"][0]["detail"]
+    assert all(not rows for _, _, rows in ui.toc_items(Session()))

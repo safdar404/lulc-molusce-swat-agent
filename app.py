@@ -55,6 +55,7 @@ ctx = get_ctx()
 # ---------------- sidebar ----------------
 with st.sidebar:
     brand = st.empty()
+    toc = st.empty()  # layers & files TOC: filled at the end of the run so it includes outputs made by this run
     st.info("Files are processed in this browser session's memory and are not saved by the app. "
             "If you use the AI agent, tool results (statistics, not your rasters) are sent to the model provider. "
             "Do not upload confidential data you are not allowed to share.")
@@ -95,7 +96,10 @@ with st.sidebar:
     key = key or st.text_input("🔑 Anthropic API key (for the Agent tab)", type="password")
     model = st.text_input("🧠 Model", DEFAULT_MODEL)
 
-ui.hero(__version__)
+_job = st.session_state.get("img_job")
+ui.hero(__version__, [("layers", len(ctx.store.rasters) + len(getattr(ctx, "vectors", {}) or {})), ("tables", len(ctx.tables)),
+                      ("outputs", len(ctx.store.outputs)), ("AI", "Claude agent" if key else "offline analysis"),
+                      ("jobs", "running" if getattr(_job, "running", False) else "idle")])
 
 R, T = ctx.store.names(), list(ctx.tables)
 
@@ -336,5 +340,8 @@ with tabs[17]:
     if len(df):
         st.download_button("⬇️ Download processing log (CSV)", df.to_csv(index=False), "processing_log.csv", "text/csv")
     report_tab.render(ctx, __version__)
+
+with toc.container():
+    ui.layers_toc(ctx, st.session_state.get("img_job"))
 
 ui.footer()

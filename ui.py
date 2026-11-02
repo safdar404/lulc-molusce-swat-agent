@@ -1,5 +1,6 @@
 """Visual theme for the Streamlit app: vibrant multi-colour palette, logo, hero header and section headings."""
 import base64
+import html
 from pathlib import Path
 
 import streamlit as st
@@ -8,6 +9,7 @@ HERE = Path(__file__).resolve().parent
 LOGO_SVG = HERE / "logo.svg"
 LOGO_PNG = HERE / "logo.png"
 LOGO_SMALL = HERE / "logo_small.png"  # pre-rendered: cheap to draw, unlike the filtered SVG
+GLOBE_TEXTURE = HERE / "globe_texture.png"  # dot-matrix land, equirectangular, from Natural Earth 110 m land (public domain)
 
 # Vibrant categorical palette (used for charts and accents)
 PALETTE = ["#7C3AED", "#EC4899", "#F97316", "#FACC15", "#10B981", "#06B6D4", "#3B82F6", "#F43F5E"]
@@ -221,7 +223,79 @@ html, body, [class*="css"], .stMarkdown, button, input, textarea { font-family: 
 [data-testid="stSidebar"] [data-testid="stFileChip"] { box-shadow: 0 3px 0 rgba(0,0,0,.25); }
 [data-testid="stChatMessage"] { box-shadow: 0 4px 0 rgba(124,58,237,.10), 0 14px 24px -16px rgba(76,29,149,.5); }
 
+/* ===================== spinning globe, AI-vision HUD (v1.4.8) ===================== */
+.globe-wrap { --d:150px; position:relative; flex:none; width:calc(var(--d) + 44px); height:calc(var(--d) + 44px); display:grid; place-items:center; z-index:1; }
+.globe { position:relative; width:var(--d); height:var(--d); border-radius:50%; overflow:hidden;
+  background: radial-gradient(circle at 35% 30%, #1E3A8A 0%, #172554 55%, #0B1030 100%);
+  box-shadow: 0 0 0 2px rgba(255,255,255,.35), 0 0 30px 6px rgba(103,232,249,.45), 0 18px 30px -8px rgba(30,27,75,.6); }
+.globe-map { position:absolute; inset:0; background-repeat:repeat-x; background-size: calc(var(--d) * 2) var(--d);
+  animation: globe-spin 24s linear infinite; filter: drop-shadow(0 0 2px rgba(103,232,249,.9)); }
+@keyframes globe-spin { from { background-position: 0 0; } to { background-position: calc(var(--d) * 2) 0; } }
+.globe-grid { position:absolute; inset:0; border-radius:50%; opacity:.35;
+  background: repeating-linear-gradient(0deg, transparent 0 18px, rgba(165,243,252,.55) 18px 19px),
+              radial-gradient(ellipse 18% 50% at 50% 50%, transparent 97%, rgba(165,243,252,.6) 98%, transparent 100%),
+              radial-gradient(ellipse 36% 50% at 50% 50%, transparent 98%, rgba(165,243,252,.6) 99%, transparent 100%); }
+.globe-scan { position:absolute; left:0; right:0; height:34%; top:-34%;
+  background: linear-gradient(180deg, transparent, rgba(103,232,249,.10) 60%, rgba(103,232,249,.55) 98%, #A5F3FC 100%);
+  animation: globe-scan 3.6s cubic-bezier(.45,0,.55,1) infinite; }
+@keyframes globe-scan { 0% { top:-34%; } 100% { top:100%; } }
+.globe-shade { position:absolute; inset:0; border-radius:50%; pointer-events:none;
+  background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.38), transparent 38%),
+              radial-gradient(circle at 70% 75%, rgba(0,0,0,.55), transparent 60%); box-shadow: inset -14px -10px 30px rgba(0,0,0,.55); }
+.ping { position:absolute; width:8px; height:8px; margin:-4px; border-radius:50%; background:#FDE047; box-shadow:0 0 8px #FDE047;
+  animation: ping 3.3s ease-out infinite; }
+@keyframes ping { 0% { box-shadow:0 0 0 0 rgba(253,224,71,.85); opacity:1; } 70% { box-shadow:0 0 0 14px rgba(253,224,71,0); } 100% { opacity:.4; } }
+.orbit { position:absolute; inset:6px; border-radius:50%; border:1.5px dashed rgba(255,255,255,.45); animation: orbit 14s linear infinite; }
+.orbit.o2 { inset:14px 0; border-style:solid; border-color: rgba(253,224,71,.35); transform: rotate(-24deg); animation-duration: 9s; animation-direction: reverse; }
+.orbit i { position:absolute; top:-5px; left:50%; width:10px; height:10px; margin-left:-5px; border-radius:3px; background:#fff;
+  box-shadow: 0 0 10px #fff, -7px 0 0 -2px #A5F3FC, 7px 0 0 -2px #A5F3FC; }
+.orbit.o2 i { background:#FDE047; box-shadow:0 0 10px #FDE047; border-radius:50%; width:7px; height:7px; }
+@keyframes orbit { from { rotate:0deg; } to { rotate:360deg; } }
+.bracket { position:absolute; inset:0; pointer-events:none;
+  background: linear-gradient(#fff,#fff) top left/18px 2px, linear-gradient(#fff,#fff) top left/2px 18px,
+              linear-gradient(#fff,#fff) top right/18px 2px, linear-gradient(#fff,#fff) top right/2px 18px,
+              linear-gradient(#fff,#fff) bottom left/18px 2px, linear-gradient(#fff,#fff) bottom left/2px 18px,
+              linear-gradient(#fff,#fff) bottom right/18px 2px, linear-gradient(#fff,#fff) bottom right/2px 18px;
+  background-repeat:no-repeat; opacity:.85; animation: lock 3.6s ease-in-out infinite; }
+@keyframes lock { 0%,100% { inset:0; opacity:.85; } 50% { inset:8px; opacity:.5; } }
+.hud { position:absolute; font: 700 .62rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.12em; color:#fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.5); text-transform:uppercase; white-space:nowrap; }
+.hud-tl { top:-4px; left:22px; } .hud-br { bottom:-4px; right:22px; } .hud-br b { color:#F43F5E; animation: blink 1.2s steps(2) infinite; }
+.hud-bl { bottom:-20px; left:50%; transform:translateX(-50%); text-transform:none; letter-spacing:.04em; opacity:.95; }
+.cls { position:relative; display:inline-block; width:5.2em; height:1em; vertical-align:bottom; }
+.cls em { position:absolute; left:0; font-style:normal; color:#FDE047; opacity:0; animation: cls 12s infinite; }
+@keyframes cls { 0% { opacity:0; transform:translateY(4px); } 3%,14% { opacity:1; transform:none; } 17%,100% { opacity:0; } }
+@keyframes blink { 50% { opacity:0; } }
+.tele { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px; position:relative; z-index:1; }
+.tele span { font: 700 .78rem/1.1 ui-monospace, SFMono-Regular, Menlo, monospace; color:#fff; padding:5px 10px; border-radius:8px;
+  background: rgba(15,23,42,.38); border:1px solid rgba(165,243,252,.45); box-shadow: inset 0 0 12px rgba(103,232,249,.18); }
+.tele small { display:block; font-size:.6rem; letter-spacing:.12em; text-transform:uppercase; opacity:.75; margin-bottom:2px; }
+@media (max-width: 640px) { .globe-wrap { --d:120px; margin-bottom:14px; } .tele { justify-content:center; } }
+
+/* layers & files table of contents (sidebar) */
+.toc-h { display:flex; align-items:center; gap:6px; font-weight:800; font-size:.78rem; letter-spacing:.04em; margin:10px 0 4px; opacity:.95; }
+.toc-h span { margin-left:auto; background: rgba(255,255,255,.18); border-radius:999px; padding:0 8px; font-size:.7rem; }
+ul.toc { list-style:none; margin:0; padding:0; }
+ul.toc li { display:flex; align-items:center; gap:8px; margin:0 0 5px; padding:6px 8px; border-radius:10px;
+  background: linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.05)); box-shadow: inset 0 1px 0 rgba(255,255,255,.18); }
+ul.toc li > div { min-width:0; flex:1; }
+ul.toc b { display:block; font-size:.8rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+ul.toc small { display:block; font-size:.66rem; opacity:.78; line-height:1.3; }
+.toc .dot { width:8px; height:8px; border-radius:50%; flex:none; background:#A5F3FC; box-shadow:0 0 6px currentColor; }
+.toc .dot.output { background:#FDE047; } .toc .dot.vector { background:#86EFAC; } .toc .dot.table { background:#F9A8D4; }
+.toc .dot.running { background:#FDBA74; animation: blink 1s steps(2) infinite; } .toc .dot.failed { background:#F43F5E; }
+.toc .tag { font-style:normal; font-size:.58rem; font-weight:800; text-transform:uppercase; letter-spacing:.06em; padding:2px 6px; border-radius:6px;
+  background: rgba(255,255,255,.16); flex:none; }
+.toc-empty { font-size:.8rem; opacity:.8; }
+[data-testid="stSidebar"] [data-testid="stExpander"] details { background: rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.28) !important;
+  border-radius:14px; box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 10px 18px -10px rgba(0,0,0,.6); }
+[data-testid="stSidebar"] [data-testid="stExpander"] summary { background: transparent !important; border-radius:14px; }
+[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover { background: rgba(255,255,255,.08) !important; }
+[data-testid="stSidebar"] [data-testid="stExpander"] summary p { font-weight:800; color:#fff !important; }
+
 @media (prefers-reduced-motion: reduce) {
+  .globe-map, .globe-scan, .ping, .orbit, .bracket, .cls em, .hud-br b, .toc .dot.running { animation: none !important; }
+  .cls em:first-child { opacity:1; }
   .hero img, .side-brand img, .hero:hover img, .side-brand:hover img { transition: none; transform: none; }
   .hero, .hero:hover, [data-testid="stMetric"], [data-testid="stMetric"]:hover, .pcard, .pcard:hover { transition: none; }
 }
@@ -240,18 +314,113 @@ def apply_theme():
     st.markdown(CSS, unsafe_allow_html=True)
 
 
-def hero(version):
+@st.cache_data(show_spinner=False)
+def globe_texture_uri():
+    try:
+        return "data:image/png;base64," + base64.b64encode(GLOBE_TEXTURE.read_bytes()).decode()
+    except OSError:
+        return ""
+
+
+def globe_html():
+    """Spinning dot-matrix Earth seen through an 'AI vision' HUD: scan beam, detection brackets, orbiting satellites, class read-out.
+    Pure CSS (Streamlit markdown cannot run scripts); motion stops for users who ask for reduced motion."""
+    classes = ["forest", "snow / ice", "water", "built-up", "cropland", "bare soil"]
+    return f"""
+<div class="globe-wrap" aria-hidden="true">
+  <div class="orbit o1"><i></i></div><div class="orbit o2"><i></i></div>
+  <div class="globe">
+    <div class="globe-map" style="background-image:url('{globe_texture_uri()}')"></div>
+    <div class="globe-grid"></div><div class="globe-scan"></div>
+    <span class="ping" style="left:38%;top:34%"></span><span class="ping" style="left:62%;top:46%;animation-delay:1.1s"></span>
+    <span class="ping" style="left:47%;top:66%;animation-delay:2.2s"></span>
+    <div class="globe-shade"></div>
+  </div>
+  <div class="bracket"></div>
+  <div class="hud hud-tl">AI&nbsp;VISION</div><div class="hud hud-br"><b>●</b> REC</div>
+  <div class="hud hud-bl">classifying&nbsp;<span class="cls">{''.join(f'<em style="animation-delay:{i * 2}s">{c}</em>' for i, c in enumerate(classes))}</span></div>
+</div>"""
+
+
+def hero(version, status=None):
+    """status: optional live read-outs [(label, value), ...] shown as an AI telemetry strip."""
     chips = ["RF / SVM classification", "Olofsson accuracy", "Intensity analysis", "Landscape metrics", "Gi* hotspots",
              "Markov-CA scenarios", "Hindcast FoM", "SWAT+ · CN · RUSLE", "AI agent"]
+    tele = ""
+    if status:
+        tele = '<div class="tele">' + "".join(f'<span><small>{html.escape(str(k))}</small>{html.escape(str(v))}</span>' for k, v in status) + "</div>"
     st.markdown(f"""
 <div class="hero">
-  <img src="{logo_data_uri()}" alt="LULC Agent logo"/>
+  {globe_html()}
   <div style="position:relative;z-index:1">
     <h1>LULC · MOLUSCE · SWAT+ Agent</h1>
     <p>Classify, validate, explain, simulate and link land-cover change to SWAT+ hydrology, with an AI agent that uses the same audited tools. v{version}</p>
+    {tele}
     <div class="chips">{''.join(f'<span class="chip">{c}</span>' for c in chips)}</div>
   </div>
 </div>""", unsafe_allow_html=True)
+
+
+def _mb(n_bytes):
+    return f"{n_bytes / 1e6:.1f} MB" if n_bytes >= 1e5 else f"{n_bytes / 1e3:.0f} kB"
+
+
+def toc_items(ctx, job=None):
+    """Plain data for the layers / files table of contents, grouped like a GIS layer panel. Kept free of Streamlit for testing."""
+    groups = []
+    store, outs = ctx.store, ctx.store.outputs
+    rows = []
+    for name, r in store.rasters.items():
+        h, w = r.data.shape
+        nb = 1 if r.bands is None else r.bands.shape[0]
+        crs = r.crs
+        epsg = crs.to_epsg() if crs else None
+        unit = "m" if crs is not None and crs.is_projected else "°"
+        px = f"{abs(r.transform.a):.3g} {unit}" if r.transform is not None else "?"
+        valid = 100.0 * (1 - r.mask.mean()) if r.mask.size else 0.0
+        rows.append(dict(name=name, tag="output" if name in outs else "upload",
+                         detail=f"{w}×{h} px · {nb} band{'s' if nb > 1 else ''} · {px} · {('EPSG:' + str(epsg)) if epsg else (crs.to_string()[:18] if crs else 'no CRS')} · {valid:.0f}% valid"))
+    groups.append(("🗺️", "Raster layers", rows))
+    groups.append(("💾", "Generated outputs (not loaded as layers)",
+                   [dict(name=n, tag="output", detail=_mb(len(b))) for n, b in outs.items() if n not in store.rasters]))
+    vrows = []
+    for name, g in (getattr(ctx, "vectors", None) or {}).items():
+        try:
+            gt = ", ".join(sorted(set(g.geom_type.dropna().astype(str))))[:30] or "empty"
+            epsg = g.crs.to_epsg() if g.crs is not None else None
+            vrows.append(dict(name=name, tag="vector", detail=f"{len(g)} feature{'s' if len(g) != 1 else ''} · {gt} · {('EPSG:' + str(epsg)) if epsg else 'no CRS'}"))
+        except Exception:  # noqa: BLE001 - a TOC must never break the page
+            vrows.append(dict(name=name, tag="vector", detail="(unreadable)"))
+    groups.append(("🧭", "Vector layers", vrows))
+    groups.append(("📊", "Tables", [dict(name=n, tag="table", detail=f"{len(df)} rows × {df.shape[1]} cols") for n, df in ctx.tables.items()]))
+    jrows = []
+    if job is not None:
+        if getattr(job, "running", False):
+            jrows.append(dict(name=getattr(job, "name", "job"), tag="running", detail=f"{100 * job.progress:.0f}% · {job.message}"[:90]))
+        elif getattr(job, "error", None):
+            jrows.append(dict(name=getattr(job, "name", "job"), tag="failed", detail=str(job.error)[:90]))
+    groups.append(("⏳", "Background jobs", jrows))
+    return groups
+
+
+def layers_toc(ctx, job=None):
+    groups = toc_items(ctx, job)
+    total = sum(len(rows) for _, _, rows in groups[:4])
+    with st.expander(f"🗂️ Layers & files ({total})", expanded=True):
+        if not any(rows for _, _, rows in groups):
+            st.markdown('<div class="toc-empty">Nothing loaded yet. Upload rasters, vectors or tables below, or download imagery in 🌍.</div>',
+                        unsafe_allow_html=True)
+            return
+        out = []
+        for ico, title, rows in groups:
+            if not rows:
+                continue
+            out.append(f'<div class="toc-h">{ico} {title} <span>{len(rows)}</span></div><ul class="toc">')
+            for r in rows:
+                out.append(f'<li><i class="dot {r["tag"]}"></i><div><b title="{html.escape(r["name"])}">{html.escape(r["name"])}</b>'
+                           f'<small>{html.escape(r["detail"])}</small></div><em class="tag {r["tag"]}">{r["tag"]}</em></li>')
+            out.append("</ul>")
+        st.markdown("".join(out), unsafe_allow_html=True)
 
 
 def section(icon, title, subtitle="", colour="violet"):

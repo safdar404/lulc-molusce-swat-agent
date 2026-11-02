@@ -1,4 +1,13 @@
 # Changelog
+## 1.4.8
+- **Spinning globe on the main card**: a dot-matrix Earth (Natural Earth 110 m land, public domain; `globe_texture.png`) seen through
+  an "AI vision" HUD: scan beam, target brackets, orbiting satellites, detection pings and a rotating land-cover class read-out.
+  Pure CSS, so nothing extra loads; motion stops when the device asks for reduced motion.
+- **Live telemetry strip** on the card: layers, tables, outputs, AI mode (Claude agent / offline analysis) and background-job state.
+- **Layers & files table of contents** in the sidebar, like a GIS layer panel: every raster (size, bands, pixel size, CRS, % valid),
+  generated output, vector layer (features, geometry, CRS), table (rows × cols) and a running or failed background job. It is drawn
+  at the end of each run, so outputs made in that run appear straight away.
+
 ## 1.4.7
 - Fix: sessions open during the 1.4.6 redeploy crashed with `AttributeError` because their composite job object (1.4.5) had no id.
   Older job objects are now upgraded in place.
