@@ -1,6 +1,6 @@
 """Audited, read-only tools shared by the Streamlit UI and the LLM agent. Nothing touches the file system."""
 import json
-import changeops, classify, hydro, knowledge, patternops, rasterops, report, simulate, swatlink, vectorops
+import changeops, classify, hydro, imagery, knowledge, patternops, rasterops, report, simulate, swatlink, vectorops
 
 REG = {}
 S = lambda t, d, **k: dict(type=t, description=d, **k)
@@ -484,6 +484,69 @@ def _rep(ctx, title="Land-cover change, simulation and hydrological response", a
     ctx.__dict__["report_files"] = {"report.docx": docx_b, "report.html": html_b}
     return dict(sections=[b[1] for b in blocks if b[0] == "h1"], tables=sum(b[0] == "table" for b in blocks), figures=sum(b[0] == "fig" and bool(b[1]) for b in blocks),
                 docx_kb=round(len(docx_b) / 1024, 1), note="Download report.docx / report.html in the Log & report tab.")
+
+
+# ---------------- v1.3.0: imagery download ----------------
+AOI = {"bbox": S("array", "Area of interest [west, south, east, north] in degrees", items={"type": "number"}),
+       "center_lon": S("number", "Centre longitude (with center_lat and size_km instead of bbox)"), "center_lat": S("number", "Centre latitude"),
+       "size_km": S("number", "Width = height of the area (km)"), "template": STR("Reuse the grid (CRS, pixels, extent) of this loaded raster")}
+
+
+def _client(ctx):
+    return ctx.__dict__.setdefault("img_client", imagery.Client())
+
+
+def _bbox(bbox=None, center_lon=None, center_lat=None, size_km=None, template=None):
+    if bbox:
+        return tuple(float(v) for v in bbox)
+    if center_lon is not None and center_lat is not None:
+        return imagery.bbox_from_center(float(center_lon), float(center_lat), float(size_km or 10))
+    if template:
+        return None
+    raise ValueError("Give bbox, centre point + size_km, or a template raster.")
+
+
+@tool("search_scenes", "Search Sentinel-2 L2A or Landsat C2 L2 scenes on the Microsoft Planetary Computer for an area, date range and cloud limit (least cloudy first).",
+      {**AOI, "product": S("string", "Sensor", enum=list(imagery.PRODUCTS)), "start": STR("YYYY-MM-DD"), "end": STR("YYYY-MM-DD"),
+       "max_cloud": S("number", "Max scene cloud % (default 30)"), "platforms": S("array", "Landsat platforms, e.g. landsat-8", items={"type": "string"})},
+      ["product", "start", "end"])
+def _ss(ctx, product, start, end, max_cloud=30, platforms=None, bbox=None, center_lon=None, center_lat=None, size_km=None, template=None):
+    b = _bbox(bbox, center_lon, center_lat, size_km, template)
+    if b is None:
+        t = ctx.store.get(template)
+        b = imagery.grid_bbox_lonlat(t.crs, t.transform, t.data.shape)
+    _, rows = imagery.search_scenes(_client(ctx), product, b, start, end, max_cloud, platforms)
+    return dict(found=len(rows), scenes=rows[:30])
+
+
+@tool("download_composite", "Download a cloud-masked median composite (Sentinel-2 L2A 10 bands or Landsat 6 bands) for an area and date range as a multi-band session "
+      "layer (reflectance x 10000) plus an observation-count raster; then classify it with the returned preset.",
+      {**AOI, "product": S("string", "Sensor", enum=list(imagery.PRODUCTS)), "start": STR("YYYY-MM-DD"), "end": STR("YYYY-MM-DD"),
+       "max_cloud": S("number", "Max scene cloud % (default 30)"), "n_scenes": S("integer", "Scenes to combine (default 6)"),
+       "resolution": S("number", "Pixel size in metres"), "platforms": S("array", "Landsat platforms", items={"type": "string"}), "output_name": STR("Output name")},
+      ["product", "start", "end"])
+def _dc(ctx, product, start, end, max_cloud=30, n_scenes=6, resolution=None, platforms=None, output_name=None, bbox=None, center_lon=None, center_lat=None,
+        size_km=None, template=None):
+    res = imagery.download_composite(ctx.store, _client(ctx), product, _bbox(bbox, center_lon, center_lat, size_km, template), start, end, max_cloud,
+                                     n_scenes, resolution, template, output_name, platforms=platforms)
+    _register(ctx, res["output"], res["observation_count"])
+    return res
+
+
+@tool("download_dem", "Download the Copernicus DEM GLO-30 for an area (or on the grid of a loaded raster) as a session layer.",
+      {**AOI, "resolution": S("number", "Pixel size in metres (default 30)"), "output_name": STR("Output name")})
+def _dd(ctx, resolution=30, output_name="copernicus_dem_30m.tif", bbox=None, center_lon=None, center_lat=None, size_km=None, template=None):
+    res = imagery.download_dem(ctx.store, _client(ctx), _bbox(bbox, center_lon, center_lat, size_km, template), template, resolution, output_name)
+    _register(ctx, res["output"])
+    return res
+
+
+@tool("download_worldcover", "Download ESA WorldCover 10 m land cover (2020 or 2021) for an area (or on the grid of a loaded raster) as a session layer, with class names.",
+      {**AOI, "year": S("integer", "2020 or 2021"), "resolution": S("number", "Pixel size in metres (default 10)"), "output_name": STR("Output name")})
+def _dw(ctx, year=2021, resolution=10, output_name=None, bbox=None, center_lon=None, center_lat=None, size_km=None, template=None):
+    res = imagery.download_worldcover(ctx.store, _client(ctx), _bbox(bbox, center_lon, center_lat, size_km, template), template, resolution, year, output_name)
+    _register(ctx, res["output"])
+    return res
 
 
 def run_tool(ctx, name, args):

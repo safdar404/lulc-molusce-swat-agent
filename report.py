@@ -129,6 +129,27 @@ def _lines(x, series, xlabel, ylabel, logy=False, title=None):
 
 
 # ------------------------------------------------------------------ section builders: (blocks, refs)
+def _b_comp(ctx, a, r):
+    t = pd.DataFrame(r.get("scenes_table", [])).head(20)
+    blocks = [("p", f"A cloud-masked {r.get('product')} composite was built from the {len(r['scenes_used'])} least-cloudy of {r['scenes_found']} scenes "
+                    f"(Microsoft Planetary Computer) on a {r['resolution_m']:.0f} m grid ({r['crs']}). Clouds, cloud shadows and cirrus were masked per pixel "
+                    "before taking the per-band median of surface reflectance; "
+                    f"{r['pixels_with_data_pct']:.1f}% of the area has at least one clear observation (mean {r['mean_observations']:.1f}).")]
+    if len(t):
+        blocks.append(("table", t, "Scenes considered for the composite (least cloudy first)"))
+    return blocks, []
+
+
+def _b_dem(ctx, a, r):
+    return [("p", f"Elevation came from the Copernicus DEM GLO-30 ({r['min_m']:.0f}-{r['max_m']:.0f} m in the study area). " + r["note"])], []
+
+
+def _b_wc(ctx, a, r):
+    t = pd.DataFrame({"class": list(r["class_area_ha"]), "area_ha": list(r["class_area_ha"].values())})
+    return [("p", r["note"]), ("table", t, f"ESA WorldCover {r['year']} land cover in the study area")], []
+
+
+
 def _b_indices(ctx, a, r):
     t = _df(r["indices"], ["index", "reference", "min", "mean", "max"])
     return [("p", f"Spectral indices ({', '.join(t['index'])}) were computed from surface reflectance obtained as DN × {r['scale']} + {r['offset']}."),
@@ -363,6 +384,7 @@ def _b_zonal(ctx, a, r):
 
 
 SECTIONS = [
+    ("Data acquisition", ["download_composite", "download_dem", "download_worldcover"]),
     ("Image classification", ["spectral_indices", "classify_image", "cluster_image"]),
     ("Accuracy assessment", ["design_accuracy_sample", "area_adjusted_accuracy", "accuracy_assessment"]),
     ("Land-cover change", ["transition_matrix", "intensity_analysis", "change_frequency_raster", "trajectory_raster"]),
@@ -372,7 +394,7 @@ SECTIONS = [
                                            "lulc_flow_attribution"]),
     ("Zonal summaries", ["zonal_statistics"]),
 ]
-BUILDERS = {"spectral_indices": _b_indices, "classify_image": _b_classify, "area_adjusted_accuracy": _b_aaa, "design_accuracy_sample": _b_design,
+BUILDERS = {"download_composite": _b_comp, "download_dem": _b_dem, "download_worldcover": _b_wc, "spectral_indices": _b_indices, "classify_image": _b_classify, "area_adjusted_accuracy": _b_aaa, "design_accuracy_sample": _b_design,
             "accuracy_assessment": _b_acc, "transition_matrix": _b_trans, "intensity_analysis": _b_ia, "change_frequency_raster": _b_freq,
             "trajectory_raster": _b_traj, "landscape_metrics": _b_lm, "moving_window_map": _b_mw, "hotspot_analysis": _b_hs, "driver_analysis": _b_drv,
             "simulate_lulc": _b_sim, "validate_simulation": _b_val, "hindcast_validation": _b_hind, "swat_landuse_lookup": _b_lookup,

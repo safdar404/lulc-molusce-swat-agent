@@ -8,6 +8,7 @@ Open-source tools for a land-use/land-cover (LULC) change, MOLUSCE simulation an
 - **Live map canvas** (`canvas_tab.py`, `live.py`, `cartography.py`): real-time processing monitor that computes LULC, change, disagreement, spectral-index, RGB-composite and continuous maps strip by strip while drawing them on a canvas, then composes an export-ready map with title, legend, scale bar, north arrow, grid coordinates and metadata box (PNG up to 600 DPI, PDF).
 - **Advanced accuracy & change analysis** (`olofsson.py`, `intensity.py`, `changeops.py`, `advanced_tabs.py`): Olofsson et al. (2014) area-adjusted accuracy with error-adjusted areas and 95% CIs, sample design and stratified random points, multi-date Intensity Analysis (Aldwaik & Pontius 2012), change-frequency and trajectory maps.
 - **Classification engine** (`classify.py`, `classify_tab.py`): Sentinel-2 / Landsat presets, 15 spectral indices, Random Forest, Extra Trees, gradient boosting, SVM, maximum likelihood and K-means, random vs spatial-block cross-validation, confidence maps.
+- **Imagery download** (`imagery.py`, `imagery_tab.py`): cloud-free Sentinel-2 / Landsat composites, Copernicus DEM and ESA WorldCover for any area from the Microsoft Planetary Computer.
 - **Report generator** (`report.py`, `report_tab.py`): one-click Word / print-ready HTML report with methods text, tables, maps, references and the processing log, built from the analyses run in the session.
 - **Vector tools** (`vectorops.py`, `vector_tab.py`): zipped shapefile / GeoPackage / GeoJSON / KML upload, rasterize, polygon training samples, zonal statistics and polygonize to GeoPackage.
 - **SWAT+ link** (`swatlink.py`, `swat_tab.py`): QSWAT+ landuse lookup, SCS Curve Number runoff and RUSLE erosion per LULC scenario, streamflow evaluation with Moriasi ratings and flow-duration signatures, and LULC impact between two SWAT+ runs.
@@ -30,7 +31,7 @@ moving-window maps, Gi* / LISA hotspot analysis, supervised and unsupervised ima
 in the manual's template (date, input, tool version, parameters, output, note).
 
 ## What it does not do
-It does **not** run MOLUSCE itself (it has its own Markov-CA simulator and compares with MOLUSCE output), QSWAT+ delineation or SWAT+ calibration, and it does not download imagery. It prepares inputs,
+It does **not** run MOLUSCE itself (it has its own Markov-CA simulator and compares with MOLUSCE output), QSWAT+ delineation or SWAT+ calibration, and imagery download needs internet access to the Microsoft Planetary Computer. It prepares inputs,
 checks them and evaluates results. AI output can be wrong: verify every number independently before it enters a thesis.
 
 ## Quick start
@@ -43,11 +44,11 @@ On Streamlit Community Cloud set **Main file path** to `app.py`. With Docker: `d
 Only add `ANTHROPIC_API_KEY` to a public deployment's secrets if you accept that visitors spend your credit.
 
 ## Testing status
-`pytest -q` runs `test_core.py`, `test_advanced.py`, `test_pattern.py`, `test_classify.py`, `test_simulate.py`, `test_swatlink.py`, `test_vectors.py` and `test_report.py` (Olofsson 2014 worked-example benchmark, hand-computed intensity analysis,
+`pytest -q` runs `test_core.py`, `test_advanced.py`, `test_pattern.py`, `test_classify.py`, `test_simulate.py`, `test_swatlink.py`, `test_vectors.py`, `test_report.py` and `test_imagery.py` (offline, with a fake STAC client) (Olofsson 2014 worked-example benchmark, hand-computed intensity analysis,
 store-level accuracy / intensity / trajectory pipelines; hand-computed landscape metrics, brute-force Gi*). Landscape metrics were
 cross-checked against pylandstats and hotspot statistics against PySAL esda. `test_core.py` covers confusion matrix, accuracy and kappa, Pontius disagreement, figure of merit, hydrology metrics, raster area/transition
 statistics on a synthetic in-memory GeoTIFF, and the tool registry. The agent loop has not been tested against the live API.
-Treat this as research software (v1.2): verify every number before it enters a thesis.
+Treat this as research software (v1.3): verify every number before it enters a thesis.
 
 ## Data and privacy
 Uploads stay in session memory. The agent sends tool results (not rasters) to the model provider. See [SECURITY.md](SECURITY.md).

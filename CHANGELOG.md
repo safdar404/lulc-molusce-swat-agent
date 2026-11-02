@@ -1,4 +1,17 @@
 # Changelog
+## 1.3.0
+- New **🌍 Download imagery** tab (`imagery.py`, `imagery_tab.py`) using the Microsoft Planetary Computer STAC API (no account needed).
+  - **Area of interest**: a centre point plus size, a lon/lat bounding box, the extent of a loaded vector, or the exact grid of a loaded
+    raster, so every download lines up pixel for pixel with your maps.
+  - **Cloud-free composites** from Sentinel-2 L2A (10 bands, 10 m, from 2017) or Landsat 4/5/7/8/9 Collection 2 Level-2 (6 bands, 30 m,
+    from 1984). Scene search with cloud limit and a scene table; per-pixel masking of clouds, shadows and cirrus (Sentinel-2 SCL,
+    Landsat QA_PIXEL); conversion to surface reflectance, including the -1000 DN offset of Sentinel-2 processing baseline 04.00+;
+    median or mean composite; observation-count raster; true-colour preview. Only the area of interest is read from the files.
+  - Composites are stored as reflectance × 10 000 with band names, and plug straight into the Classification tab (new preset for the
+    6-band Landsat composite).
+  - **Copernicus DEM GLO-30** and **ESA WorldCover** (2020 / 2021, with class names) on the same grid.
+  - Memory guard: at most 4 million pixels per band (about 20 × 20 km at 10 m or 60 × 60 km at 30 m).
+- Agent: new tools `search_scenes`, `download_composite`, `download_dem`, `download_worldcover`. The report gains a Data acquisition section.
 ## 1.2.0
 - **Report generator** (`report.py`, `report_tab.py`, in the renamed **📝 Log & report** tab, plus an agent tool `generate_report`).
   - Every analysis result is now kept in the session (not only the short log line), and the report is written from it: a methods and

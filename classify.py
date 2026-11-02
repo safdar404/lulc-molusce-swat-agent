@@ -27,6 +27,8 @@ PRESETS = {
     "Sentinel-2 L2A, 4 bands at 10 m (B2 B3 B4 B8)": dict(bands=dict(blue=1, green=2, red=3, nir=4), scale=1e-4, offset=0.0),
     "Landsat 8/9 C2 L2, 7 bands (B1-B7)": dict(bands=dict(blue=2, green=3, red=4, nir=5, swir1=6, swir2=7), scale=2.75e-5, offset=-0.2),
     "Landsat 4/5/7 C2 L2, 6 bands (B1-B5, B7)": dict(bands=dict(blue=1, green=2, red=3, nir=4, swir1=5, swir2=6), scale=2.75e-5, offset=-0.2),
+    "Downloaded Landsat composite, 6 bands (blue green red nir swir1 swir2)": dict(
+        bands=dict(blue=1, green=2, red=3, nir=4, swir1=5, swir2=6), scale=1e-4, offset=0.0),
     "Already reflectance 0-1 (custom order)": dict(bands={}, scale=1.0, offset=0.0),
 }
 
