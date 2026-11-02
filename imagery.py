@@ -28,7 +28,10 @@ STAC = "https://planetarycomputer.microsoft.com/api/stac/v1"
 SAS = "https://planetarycomputer.microsoft.com/api/sas/v1/token/{}"
 MAX_PIXELS = 9_000_000          # per band on the target grid (about 90 x 90 km at 30 m; memory guard for small cloud hosts)
 GDAL_ENV = dict(GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR", CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".tif,.TIF,.tiff", GDAL_HTTP_MULTIRANGE="YES",
-                GDAL_HTTP_MERGE_CONSECUTIVE_RANGES="YES", GDAL_HTTP_MAX_RETRY="3", GDAL_HTTP_RETRY_DELAY="1", VSI_CACHE="TRUE")
+                GDAL_HTTP_MERGE_CONSECUTIVE_RANGES="YES", GDAL_HTTP_MAX_RETRY="3", GDAL_HTTP_RETRY_DELAY="1", VSI_CACHE="TRUE",
+                # Hard memory caps: GDAL's block cache otherwise defaults to 5 % of the HOST's RAM, which inside a ~1 GB cloud container
+                # is enough to get the app killed when a dozen full-resolution scenes are open at once.
+                GDAL_CACHEMAX=96, VSI_CACHE_SIZE=4_000_000)
 
 PRODUCTS = {
     "Sentinel-2 L2A": dict(collection="sentinel-2-l2a", res=10,
@@ -199,6 +202,7 @@ def composite(client, product, items, crs, transform, shape, progress=None, stat
     Memory-safe: clear-sky masks are kept bit-packed and each band is composited in row strips, so dozens of scenes over a
     whole basin fit in a few hundred MB."""
     import contextlib
+    import gc
     import warnings
     from rasterio.windows import Window
     if shape[0] * shape[1] > MAX_PIXELS:
@@ -236,7 +240,8 @@ def composite(client, product, items, crs, transform, shape, progress=None, stat
                     continue
                 src = es.enter_context(rasterio.open(client.sign(col, it["assets"][band]["href"])))
                 vrts.append(es.enter_context(WarpedVRT(src, crs=crs, transform=transform, width=W, height=H, resampling=Resampling.bilinear,
-                                                       src_nodata=src.nodata, nodata=src.nodata if src.nodata is not None else 0)))
+                                                       src_nodata=src.nodata, nodata=src.nodata if src.nodata is not None else 0,
+                                                       warp_mem_limit=16)))
             for r0 in range(0, H, strip_rows):
                 h = min(strip_rows, H - r0)
                 win = Window(0, r0, W, h)
@@ -254,6 +259,7 @@ def composite(client, product, items, crs, transform, shape, progress=None, stat
                     warnings.simplefilter("ignore", RuntimeWarning)   # pixels never clear (or outside the footprints) stay NaN
                     agg = np.nanmedian(stack, axis=0) if statistic == "median" else np.nanmean(stack, axis=0)
                 cube[b, r0:r0 + h] = np.where(np.isfinite(agg), np.clip(np.round(agg * 10000), 1, 65534), 0).astype("uint16")
+        gc.collect()
         step += len(used)
         if progress:
             progress(min(step / n_steps, 1.0), f"band {band} composited from {len(used)} scenes")
@@ -329,6 +335,7 @@ def download_composite(store, client, product, bbox=None, start=None, end=None, 
     count = np.where(inside, count, 255).astype("uint8")
     name = output_name or f"{'S2' if product.startswith('Sentinel') else 'Landsat'}_{start[:4]}_{end[:4]}_composite.tif"
     store.outputs[name] = stack_bytes(cube, crs, transform, p["names"])
+    del cube                                   # ~100 MB for a whole basin; the GeoTIFF bytes are what the session keeps
     cname = name.rsplit(".", 1)[0] + "_obs_count.tif"
     store.outputs[cname] = stack_bytes(count[None], crs, transform, ["valid observations"], nodata=255)
     covered = (count > 0) & inside

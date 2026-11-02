@@ -1,4 +1,8 @@
 # Changelog
+## 1.4.2
+- Imagery: hard memory caps for basin-wide composites (GDAL block cache 96 MB, 4 MB VSI cache per file, 16 MB warp buffer, freed after each band).
+  GDAL's default cache is 5 % of the host's RAM, which could get the cloud app restarted mid-download when a dozen full Landsat scenes were open.
+
 ## 1.4.1
 Fixes found in the live Astore basin run (3,988 km², Landsat 8/9, Aug-Sep 2025):
 - **Scene selection per footprint tile**: the composite took the least-cloudy scenes overall, which all came from one Landsat row, so the
