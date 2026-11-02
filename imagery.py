@@ -146,10 +146,21 @@ def s2_clear(scl):
     return ~np.isin(scl, [0, 1, 3, 8, 9, 10])
 
 
-def landsat_clear(qa):
-    """Landsat QA_PIXEL: fill (bit 0), dilated cloud (1), cirrus (2), cloud (3), cloud shadow (4) must all be 0."""
+def landsat_clear(qa, strict=False):
+    """Landsat Collection 2 QA_PIXEL clear-sky test.
+
+    Default (snow-aware): reject fill, cloud with HIGH confidence (bit 3 and bits 8-9 = 3), cloud shadow (bit 4) and high-confidence
+    cirrus (bits 14-15 = 3); keep dilated-cloud buffers and medium-confidence cloud, which Fmask often assigns to bright snow and glacier
+    ice. Pixels flagged snow (bit 5) are kept unless the cloud confidence is high. strict=True rejects every cloud-related flag (bits 1-4)."""
     qa = qa.astype(np.uint16)
-    return (qa & 0b11111) == 0
+    fill = (qa & 1) > 0
+    if strict:
+        return ~fill & ((qa & 0b11110) == 0)
+    cloud_hi = ((qa >> 3) & 1).astype(bool) & (((qa >> 8) & 3) == 3)
+    shadow = ((qa >> 4) & 1).astype(bool)
+    cirrus_hi = ((qa >> 14) & 3) == 3
+    snow = ((qa >> 5) & 1).astype(bool)
+    return ~fill & ~cloud_hi & ~(shadow & ~snow) & ~(cirrus_hi & ~snow)
 
 
 def s2_offset(item):
@@ -182,47 +193,87 @@ def search_scenes(client, product, bbox, start, end, max_cloud=30, platforms=Non
     return [items[i] for i in order], [rows[i] for i in order]
 
 
-def composite(client, product, items, crs, transform, shape, progress=None, statistic="median"):
-    """Cloud-masked composite. Returns (uint16 cube reflectance x 10 000, observation count, used scene ids)."""
+def composite(client, product, items, crs, transform, shape, progress=None, statistic="median", strip_rows=256, strict_mask=False):
+    """Cloud-masked composite. Returns (uint16 cube reflectance x 10 000, observation count, used scene ids).
+
+    Memory-safe: clear-sky masks are kept bit-packed and each band is composited in row strips, so dozens of scenes over a
+    whole basin fit in a few hundred MB."""
+    import contextlib
+    import warnings
+    from rasterio.windows import Window
     if shape[0] * shape[1] > MAX_PIXELS:
         raise ValueError(f"Area is {shape[0]}x{shape[1]} = {shape[0] * shape[1]:,} pixels per band; the limit is {MAX_PIXELS:,}. "
                          "Use a smaller area or a coarser resolution.")
+    H, W = shape
     p = PRODUCTS[product]
     col = p["collection"]
-    masks, used = [], []
+    packed, used = [], []
     n_steps = len(items) * (len(p["bands"]) + 1)
     step = 0
+    count = np.zeros(shape, "uint8")
     for it in items:
         if p["qa"] not in it.get("assets", {}):
             continue
         qa, nod = _read(client.sign(col, it["assets"][p["qa"]]["href"]), crs, transform, shape, Resampling.nearest, "uint16")
-        clear = (s2_clear(qa) if product == "Sentinel-2 L2A" else landsat_clear(qa)) & ~nod
+        clear = (s2_clear(qa) if product == "Sentinel-2 L2A" else landsat_clear(qa, strict_mask)) & ~nod
         step += 1
         if progress:
             progress(step / n_steps, f"mask {it['id']}: {100 * clear.mean():.0f}% clear")
         if clear.any():
-            masks.append(clear)
+            packed.append(np.packbits(clear, axis=1))
+            count += clear.astype("uint8")
             used.append(it)
+        del qa, nod, clear
     if not used:
         raise ValueError("No cloud-free pixels in the selected scenes; widen the dates or raise the cloud limit.")
-    count = np.sum(masks, axis=0).astype("uint8")
-    cube = np.zeros((len(p["bands"]),) + tuple(shape), "uint16")
+    cube = np.zeros((len(p["bands"]), H, W), "uint16")
     for b, band in enumerate(p["bands"]):
-        stack = np.full((len(used),) + tuple(shape), np.nan, "float32")
-        for k, (it, m) in enumerate(zip(used, masks)):
-            if band in it["assets"]:
-                dn, nod = _read(client.sign(col, it["assets"][band]["href"]), crs, transform, shape, Resampling.bilinear)
-                refl = to_reflectance(product, dn, it).astype("float32")
-                stack[k] = np.where(m & ~nod & (dn > 0), refl, np.nan)
-            step += 1
-            if progress:
-                progress(min(step / n_steps, 1.0), f"{band} · {it['id']}")
-        import warnings
-        with np.errstate(all="ignore"), warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)   # pixels never clear (or outside the footprint) stay NaN
-            agg = np.nanmedian(stack, axis=0) if statistic == "median" else np.nanmean(stack, axis=0)
-        cube[b] = np.where(np.isfinite(agg), np.clip(np.round(agg * 10000), 1, 65534), 0).astype("uint16")
+        with rasterio.Env(**GDAL_ENV), contextlib.ExitStack() as es:
+            vrts = []
+            for it in used:
+                if band not in it["assets"]:
+                    vrts.append(None)
+                    continue
+                src = es.enter_context(rasterio.open(client.sign(col, it["assets"][band]["href"])))
+                vrts.append(es.enter_context(WarpedVRT(src, crs=crs, transform=transform, width=W, height=H, resampling=Resampling.bilinear,
+                                                       src_nodata=src.nodata, nodata=src.nodata if src.nodata is not None else 0)))
+            for r0 in range(0, H, strip_rows):
+                h = min(strip_rows, H - r0)
+                win = Window(0, r0, W, h)
+                stack = np.full((len(used), h, W), np.nan, "float32")
+                for k, (it, vrt) in enumerate(zip(used, vrts)):
+                    if vrt is None:
+                        continue
+                    m = np.unpackbits(packed[k][r0:r0 + h], axis=1, count=W).astype(bool)
+                    if not m.any():
+                        continue
+                    dn = vrt.read(1, window=win, out_dtype="float32")
+                    ok = m & (vrt.read_masks(1, window=win) > 0) & (dn > 0)
+                    stack[k] = np.where(ok, to_reflectance(product, dn, it), np.nan)
+                with np.errstate(all="ignore"), warnings.catch_warnings():
+                    warnings.simplefilter("ignore", RuntimeWarning)   # pixels never clear (or outside the footprints) stay NaN
+                    agg = np.nanmedian(stack, axis=0) if statistic == "median" else np.nanmean(stack, axis=0)
+                cube[b, r0:r0 + h] = np.where(np.isfinite(agg), np.clip(np.round(agg * 10000), 1, 65534), 0).astype("uint16")
+        step += len(used)
+        if progress:
+            progress(min(step / n_steps, 1.0), f"band {band} composited from {len(used)} scenes")
     return cube, count, [it["id"] for it in used]
+
+
+def select_scenes(items, rows, n_per_tile, max_total=30):
+    """Least-cloudy scenes PER FOOTPRINT TILE (Landsat path/row, Sentinel-2 MGRS tile), so a basin spanning several tiles is fully covered."""
+    by_tile = {}
+    for it, r in zip(items, rows):           # items are already sorted by cloud cover
+        by_tile.setdefault(r["tile"], []).append(it)
+    sel, k = [], 0
+    while len(sel) < max_total and k < max(len(v) for v in by_tile.values()):
+        for v in by_tile.values():           # round-robin: every tile's best scene first
+            if k < len(v) and k < n_per_tile and len(sel) < max_total:
+                sel.append(v[k])
+        k += 1
+        if k >= n_per_tile:
+            break
+    return sel, sorted(by_tile)
 
 
 def stack_bytes(cube, crs, transform, names, nodata=0):
@@ -260,7 +311,7 @@ def single_asset(client, collection, asset, bbox, crs, transform, shape, resampl
 
 
 def download_composite(store, client, product, bbox=None, start=None, end=None, max_cloud=30, n_scenes=6, res=None, template=None,
-                       output_name=None, progress=None, statistic="median", platforms=None, clip=None):
+                       output_name=None, progress=None, statistic="median", platforms=None, clip=None, strict_mask=False):
     p = PRODUCTS[product]
     tpl = store.get(template) if template else None
     if tpl is not None:
@@ -271,8 +322,8 @@ def download_composite(store, client, product, bbox=None, start=None, end=None, 
     items, rows = search_scenes(client, product, bbox, start, end, max_cloud, platforms)
     if not items:
         raise ValueError("No scenes found: widen the dates, raise the cloud limit or check the area.")
-    sel = items[: int(n_scenes)]
-    cube, count, used = composite(client, product, sel, crs, transform, shape, progress, statistic)
+    sel, tiles = select_scenes(items, rows, int(n_scenes))
+    cube, count, used = composite(client, product, sel, crs, transform, shape, progress, statistic, strict_mask=strict_mask)
     inside = clip_mask(clip, crs, transform, shape)
     cube[:, ~inside] = 0
     count = np.where(inside, count, 255).astype("uint8")
@@ -283,10 +334,13 @@ def download_composite(store, client, product, bbox=None, start=None, end=None, 
     covered = (count > 0) & inside
     return dict(output=name, clipped=clip is not None, area_km2=float(inside.sum() * abs(transform.a * transform.e) / 1e6), observation_count=cname, product=product, preset=p["preset"], crs=crs.to_string(), resolution_m=abs(transform.a),
                 size=[int(shape[1]), int(shape[0])], bbox_lonlat=[round(v, 5) for v in bbox], scenes_found=len(items), scenes_used=used,
+                footprint_tiles=tiles, scenes_per_tile=int(n_scenes), mask="strict" if strict_mask else "snow-aware",
                 scenes_table=rows[:50], pixels_with_data_pct=float(covered.sum() / max(inside.sum(), 1) * 100),
                 mean_observations=float(count[covered].mean()) if covered.any() else 0,
-                note="Stored as surface reflectance x 10 000 (uint16, 0 = no data). In the Classification tab choose this file and the preset "
-                     f"'{p['preset']}'. Pixels with 0 observations were cloudy in every scene: add scenes or widen the dates.")
+                note=("Stored as surface reflectance x 10 000 (uint16, 0 = no data). In the Classification tab choose this file and the preset "
+                      f"'{p['preset']}'. Scenes were chosen per footprint tile ({', '.join(tiles)}). ")
+                + (f"WARNING: only {covered.sum() / max(inside.sum(), 1) * 100:.0f}% of the area has a clear observation: widen the dates, raise the "
+                   "cloud limit or the scenes per tile." if covered.sum() < 0.9 * inside.sum() else "Pixels with 0 observations were cloudy in every scene."))
 
 
 def download_dem(store, client, bbox=None, template=None, res=30, output_name="copernicus_dem_30m.tif", clip=None):

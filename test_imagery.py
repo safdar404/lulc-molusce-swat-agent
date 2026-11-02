@@ -74,8 +74,10 @@ def test_grid_and_masks():
     assert crs.to_epsg() == 32643 and shape[0] == pytest.approx(10000 / 30, abs=15) and tr.a == 30
     assert I.utm_epsg(-70, -33) == 32719
     assert list(I.s2_clear(np.array([0, 3, 4, 5, 6, 8, 9, 10, 11]))) == [False, False, True, True, True, False, False, False, True]
-    qa = np.array([21824, 21952, 22280, 23888, 1])   # L8 clear land, clear water, cloud, shadow, fill
-    assert list(I.landsat_clear(qa)) == [True, True, False, False, False]
+    qa = np.array([21824, 21952, 22280, 23888, 1, 30048, 22018, 55052, 54596])
+    # clear land, clear water, high-conf cloud, shadow, fill, snow, dilated-cloud buffer, cloud+cirrus, high-conf cirrus
+    assert list(I.landsat_clear(qa)) == [True, True, False, False, False, True, True, False, False]
+    assert list(I.landsat_clear(qa, strict=True)) == [True, True, False, False, False, True, False, False, False]
     assert I.s2_offset({"properties": {"s2:processing_baseline": "05.09"}}) == -1000 and I.s2_offset({"properties": {"s2:processing_baseline": "02.14"}}) == 0
     assert I.to_reflectance("Landsat 4-9 C2 L2", np.array([10000.0]), {})[0] == pytest.approx(0.075)
 
@@ -183,3 +185,13 @@ def test_agent_tools_and_report(world):
     blocks = report.build(s, {"title": "t"})
     assert any(b[0] == "h1" and b[1] == "Data acquisition" for b in blocks)
     assert "error" in s.call("download_composite", {"product": "Sentinel-2 L2A", "start": "2023-01-01", "end": "2023-12-31"})   # no area
+
+
+def test_scene_selection_covers_every_tile():
+    items = [{"id": f"{t}_{k}"} for t in ("150/035", "149/035", "150/036") for k in range(5)]
+    rows = [{"tile": i["id"].split("_")[0], "cloud": k} for k, i in enumerate(items)]
+    order = np.argsort([r["cloud"] % 5 for r in rows], kind="stable")      # sorted by cloud, tiles interleaved
+    items, rows = [items[i] for i in order], [rows[i] for i in order]
+    sel, tiles = I.select_scenes(items, rows, 2)
+    assert len(tiles) == 3 and len(sel) == 6
+    assert sorted({s["id"].split("_")[0] for s in sel}) == tiles

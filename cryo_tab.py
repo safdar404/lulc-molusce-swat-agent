@@ -51,13 +51,15 @@ def render(ctx, R):
         b = pd.DataFrame(h["bands"])
         b["band"] = b["from_m"].astype(int).astype(str) + "–" + b["to_m"].astype(int).astype(str)
         b["mid"] = (b["from_m"] + b["to_m"]) / 2
-        bars = alt.Chart(b).mark_bar(color="#15803D").encode(y=alt.Y("mid:Q", title="Elevation (m)"), x=alt.X("area_km2:Q", title="Area per band (km²)"),
-                                                              tooltip=["band", alt.Tooltip("area_km2:Q", format=",.1f"), alt.Tooltip("area_pct:Q", format=".1f")])
+        b["zero"] = 0.0
+        bars = alt.Chart(b).mark_rect(color="#15803D", opacity=0.85, stroke="white", strokeWidth=0.5).encode(
+            y=alt.Y("from_m:Q", title="Elevation (m)"), y2="to_m:Q", x=alt.X("zero:Q", title="Area per band (km², green bars)"), x2="area_km2:Q",
+            tooltip=["band", alt.Tooltip("area_km2:Q", format=",.1f"), alt.Tooltip("area_pct:Q", format=".1f")])
         curve = alt.Chart(b).mark_line(color="#DC2626", point=alt.OverlayMarkDef(color="#DC2626", shape="diamond", size=60)).encode(
-            y="to_m:Q", x=alt.X("cumulative_km2:Q", title="Cumulative area (km², red)"), tooltip=["to_m", alt.Tooltip("cumulative_km2:Q", format=",.0f")])
-        st.altair_chart(alt.layer(bars, curve).resolve_scale(x="independent").properties(height=380, title="Area per band (green) and hypsometric curve (red)"),
-                        use_container_width=True)
-        st.dataframe(b.drop(columns=["mid"]), hide_index=True)
+            y="to_m:Q", x=alt.X("cumulative_km2:Q", title="Cumulative area (km², red curve)", axis=alt.Axis(orient="top")),
+            tooltip=["to_m", alt.Tooltip("cumulative_km2:Q", format=",.0f")])
+        st.altair_chart(alt.layer(bars, curve).resolve_scale(x="independent").properties(height=400), use_container_width=True)
+        st.dataframe(b.drop(columns=["mid", "zero"]), hide_index=True)
         st.caption(h["note"])
 
     ui.section("❄️", "Snow and ice mapping", "NDSI > 0.4 and NIR > 0.11 on a composite (Hall et al. 1995)", "violet")

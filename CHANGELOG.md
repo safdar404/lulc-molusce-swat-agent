@@ -1,4 +1,14 @@
 # Changelog
+## 1.4.1
+Fixes found in the live Astore basin run (3,988 km², Landsat 8/9, Aug-Sep 2025):
+- **Scene selection per footprint tile**: the composite took the least-cloudy scenes overall, which all came from one Landsat row, so the
+  southern basin had no data (37 % coverage). Scenes are now chosen per path/row (Landsat) or MGRS tile (Sentinel-2).
+- **Snow-aware Landsat cloud mask**: only high-confidence cloud, cloud shadow and high-confidence cirrus are rejected; dilated-cloud buffers
+  and medium-confidence cloud, which Fmask often assigns to bright snow and glacier ice, are kept. Snow-flagged pixels are kept unless the
+  cloud confidence is high. A "strict" option restores the old behaviour.
+- **Memory-safe compositing**: masks are bit-packed and bands are composited in row strips, so many scenes over a whole basin fit in memory.
+- Coverage warning when less than 90 % of the area has a clear observation; the scene list shows the footprint tiles.
+- Hypsometry chart redrawn as band bars plus cumulative curve (it showed thin bars and a negative axis).
 ## 1.4.0
 - New **🏔️ Snow, ice & elevation** tab (`cryo.py`, `cryo_tab.py`) for mountain basins such as Astore and Hunza.
   - **Hypsometry**: area per elevation band or custom zones (e.g. 2500 / 3500 / 4500 / 5500 m), cumulative hypsometric curve,

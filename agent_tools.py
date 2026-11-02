@@ -527,13 +527,15 @@ def _ss(ctx, product, start, end, max_cloud=30, platforms=None, bbox=None, cente
 @tool("download_composite", "Download a cloud-masked median composite (Sentinel-2 L2A 10 bands or Landsat 6 bands) for an area and date range as a multi-band session "
       "layer (reflectance x 10000) plus an observation-count raster; then classify it with the returned preset.",
       {**AOI, "product": S("string", "Sensor", enum=list(imagery.PRODUCTS)), "start": STR("YYYY-MM-DD"), "end": STR("YYYY-MM-DD"),
-       "max_cloud": S("number", "Max scene cloud % (default 30)"), "n_scenes": S("integer", "Scenes to combine (default 6)"),
+       "max_cloud": S("number", "Max scene cloud % (default 30)"), "n_scenes": S("integer", "Least-cloudy scenes per footprint tile (default 4)"),
+       "strict_mask": S("boolean", "Reject every Landsat cloud flag (default false = snow-aware mask)"),
        "resolution": S("number", "Pixel size in metres"), "platforms": S("array", "Landsat platforms", items={"type": "string"}), "output_name": STR("Output name")},
       ["product", "start", "end"])
-def _dc(ctx, product, start, end, max_cloud=30, n_scenes=6, resolution=None, platforms=None, output_name=None, bbox=None, center_lon=None, center_lat=None,
-        size_km=None, template=None, vector=None, clip_vector=None):
+def _dc(ctx, product, start, end, max_cloud=30, n_scenes=4, resolution=None, platforms=None, output_name=None, bbox=None, center_lon=None, center_lat=None,
+        size_km=None, template=None, vector=None, clip_vector=None, strict_mask=False):
     res = imagery.download_composite(ctx.store, _client(ctx), product, _bbox(bbox, center_lon, center_lat, size_km, template, vector, ctx), start, end, max_cloud,
-                                     n_scenes, resolution, template, output_name, platforms=platforms, clip=_vec(ctx, clip_vector) if clip_vector else None)
+                                     n_scenes, resolution, template, output_name, platforms=platforms, clip=_vec(ctx, clip_vector) if clip_vector else None,
+                                     strict_mask=bool(strict_mask))
     _register(ctx, res["output"], res["observation_count"])
     return res
 
