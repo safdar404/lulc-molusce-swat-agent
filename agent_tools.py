@@ -1,6 +1,6 @@
 """Audited, read-only tools shared by the Streamlit UI and the LLM agent. Nothing touches the file system."""
 import json
-import changeops, hydro, knowledge, rasterops
+import changeops, hydro, knowledge, patternops, rasterops
 
 REG = {}
 S = lambda t, d, **k: dict(type=t, description=d, **k)
@@ -180,6 +180,40 @@ def _cf(ctx, layers, output_name):
       ["layers", "category", "output_name"])
 def _traj(ctx, layers, category, output_name, unit="ha"):
     return changeops.trajectory_raster(ctx.store, layers, category, output_name, unit)
+
+
+# ---------------- v0.7.0: landscape pattern and hotspots ----------------
+@tool("landscape_metrics", "FRAGSTATS-definition landscape metrics for one or several LULC rasters (dates): class level (CA, PLAND, NP, PD, LPI, TE, ED, LSI, "
+      "AREA_MN/AM/CV, SHAPE, FRAC, ENN, core area, AI, COHESION, DIVISION, MESH, SPLIT) and landscape level (plus CONTAG, SHDI, SHEI, SIDI, PR). "
+      "Use to quantify fragmentation and aggregation and how they changed between dates.",
+      {"layers": S("array", "LULC rasters, one per date", items={"type": "string"}), "neighbourhood": S("integer", "Patch rule 8 (default) or 4"),
+       "edge_depth_m": S("number", "Edge depth for core area in metres (default one cell)"), "labels": S("object", "Optional {code: name}"),
+       "patches_top": S("integer", "Also list the N largest patches"),
+       "nearest_neighbour": S("boolean", "Compute ENN (slowest metric on large rasters; default true)")}, ["layers"])
+def _lm(ctx, layers, neighbourhood=8, edge_depth_m=None, labels=None, patches_top=0, nearest_neighbour=True):
+    return patternops.landscape_metrics(ctx.store, layers, neighbourhood, edge_depth_m, labels, patches_top, nearest_neighbour)
+
+
+@tool("moving_window_map", "Moving-window landscape metric raster (SHDI, SIDI, PR, ED or PLAND of one class) as a downloadable GeoTIFF.",
+      {"layer": STR("LULC raster"), "metric": S("string", "Metric", enum=["SHDI", "SIDI", "PR", "ED", "PLAND"]), "window_m": S("number", "Window side in metres"),
+       "class_code": S("integer", "Class for PLAND"), "output_name": STR("Output file name")}, ["layer", "metric", "window_m", "output_name"])
+def _mw(ctx, layer, metric, window_m, output_name, class_code=None):
+    return patternops.moving_window_raster(ctx.store, layer, metric, window_m, output_name, class_code)
+
+
+@tool("hotspot_analysis", "Spatial hotspots on a block-aggregated grid: global Moran's I, Getis-Ord Gi* (90/95/99% hot/cold, optional FDR) and Local Moran's I "
+      "clusters (HH, LL, HL, LH). Variable: 'change', 'gain' or 'loss' of a class between layer and second_layer, 'presence' (share of a class), or "
+      "'value' of a continuous raster. Writes GeoTIFFs and returns the strongest hot/cold spots with coordinates.",
+      {"layer": STR("Raster (earlier map for change variables)"), "variable": S("string", "Variable", enum=["change", "gain", "loss", "presence", "value"]),
+       "second_layer": STR("Later map for change/gain/loss"), "class_code": S("integer", "Class for gain/loss/presence"),
+       "block": S("integer", "Aggregation block in cells per side (default 10)"), "radius": S("integer", "Neighbour radius in blocks (default 1)"),
+       "kernel_shape": S("string", "square or circle", enum=["square", "circle"]), "method": S("string", "gi, lisa or both", enum=["gi", "lisa", "both"]),
+       "fdr": S("boolean", "Benjamini-Hochberg FDR correction (default true)"), "permutations": S("integer", "LISA permutations (default 199)"),
+       "output_prefix": STR("Prefix for output files")}, ["layer"])
+def _hs(ctx, layer, variable="value", second_layer=None, class_code=None, block=10, radius=1, kernel_shape="square", method="both", fdr=True,
+        permutations=199, output_prefix="hotspot"):
+    return patternops.hotspot_analysis(ctx.store, layer, variable, second_layer, class_code, block, radius, kernel_shape, method, fdr,
+                                       permutations, output_prefix)
 
 
 def run_tool(ctx, name, args):

@@ -14,7 +14,8 @@ Rules:
 6. When teaching, cite the practical number, deliverable and a viva question.
 7. For accuracy reporting use area_adjusted_accuracy (Olofsson 2014: error-adjusted areas with 95% CI), not kappa alone. Without validation points, use design_accuracy_sample then generate_sample_points.
 8. For change between 2+ dates run intensity_analysis after the accuracy check; explain fast/slow intervals, active/dormant categories and targeted transitions, and flag alternation as possible map error.
-9. Be concise. If information is missing, ask one clear question."""
+9. For fragmentation or spatial pattern use landscape_metrics (compare dates on one grid and legend); for where change concentrates use hotspot_analysis and report block size, neighbourhood and FDR setting, testing more than one scale.
+10. Be concise. If information is missing, ask one clear question."""
 
 
 def run_agent(api_key, model, messages, session, user_text, max_rounds=10):

@@ -1,4 +1,18 @@
 # Changelog
+## 0.7.0
+- New **🧩 Landscape & hotspots** tab.
+- **Landscape metrics** (`landscape.py`) with FRAGSTATS definitions, for one or several dates. Class level: CA, PLAND, NP, PD, LPI, TE, ED,
+  LSI, AREA_MN / AM / CV, SHAPE_MN / AM, FRAC_MN, ENN_MN, TCA, CPLAND, AI, COHESION, DIVISION, MESH, SPLIT. Landscape level adds CONTAG,
+  SHDI, SHEI, SIDI, SIEI, PR, PRD. 8- or 4-neighbour patch rule, edge depth for core area, largest-patch list, first-to-last change,
+  grouped bar charts and Excel export. Cross-checked against pylandstats 3.1: identical values for every shared metric (SHDI and CONTAG
+  follow FRAGSTATS' cell-proportion definition, which pylandstats approximates from adjacencies).
+- **Moving-window maps**: SHDI, SIDI, patch richness, edge density or a class's PLAND in a square window, as a GeoTIFF with preview.
+- **Hotspot analysis** (`hotspot.py`): global Moran's I, Getis-Ord Gi* with 90/95/99 % hot/cold bins and optional Benjamini-Hochberg
+  FDR correction, and Local Moran's I (LISA) clusters by conditional permutation. Works on LULC change, gain or loss of a class, class
+  share, or any continuous raster, aggregated to blocks; returns the strongest hot and cold spots with coordinates. Gi*, global Moran's I
+  and local Moran's I values are identical to PySAL esda 2.10.
+- Agent: new tools `landscape_metrics`, `moving_window_map`, `hotspot_analysis`, and a rule to report scale settings for hotspots.
+- New dependency: `scipy`.
 ## 0.6.0
 - New **📏 Area-adjusted accuracy** tab (`olofsson.py`): Olofsson et al. (2014) good-practice estimators. Area-weighted error matrix,
   overall / user's / producer's accuracy with 95% CI, error-adjusted class areas with 95% CI (chart shows where pixel counts are biased),

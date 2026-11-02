@@ -7,6 +7,7 @@ Open-source tools for a land-use/land-cover (LULC) change, MOLUSCE simulation an
 - **Streamlit web app** (`app.py`): upload GeoTIFFs and CSVs, run audited checks and statistics, ask an AI agent that uses the same tools, download a processing log.
 - **Live map canvas** (`canvas_tab.py`, `live.py`, `cartography.py`): real-time processing monitor that computes LULC, change, disagreement, spectral-index, RGB-composite and continuous maps strip by strip while drawing them on a canvas, then composes an export-ready map with title, legend, scale bar, north arrow, grid coordinates and metadata box (PNG up to 600 DPI, PDF).
 - **Advanced accuracy & change analysis** (`olofsson.py`, `intensity.py`, `changeops.py`, `advanced_tabs.py`): Olofsson et al. (2014) area-adjusted accuracy with error-adjusted areas and 95% CIs, sample design and stratified random points, multi-date Intensity Analysis (Aldwaik & Pontius 2012), change-frequency and trajectory maps.
+- **Landscape pattern & hotspots** (`landscape.py`, `hotspot.py`, `patternops.py`, `pattern_tab.py`): FRAGSTATS-definition class and landscape metrics across dates, moving-window maps, Getis-Ord Gi* and Local Moran's I hotspot maps with FDR correction.
 - **Look and feel** (`ui.py`, `logo.svg`, `logo.png`): vibrant multi-colour theme, logo, hero header, colour-coded metric cards and charts.
 - **Analysis core** (`metrics.py`, `rasterops.py`, `hydro.py`, `knowledge.py`, `store.py`, `session.py`, `agent_tools.py`, `agent.py`): statistics, raster operations and the agent loop.
 
@@ -19,7 +20,8 @@ MOLUSCE geometry checklist (CRS, cell size, rows/columns, origin, NoData), LULC 
 accuracy assessment from validation points (overall, user's and producer's accuracy, kappa), hindcast validation
 (kappa, quantity/allocation disagreement, figure of merit), good-practice area-adjusted accuracy (Olofsson 2014) with error-adjusted
 areas, Pontius quantity/allocation/exchange/shift, accuracy sample design, multi-date Intensity Analysis (interval, category, transition levels,
-stationarity, gain/loss/net/swap, alternation), change-frequency and trajectory rasters, NDVI/NDWI/NDBI, NSE/PBIAS/R2/KGE, a 30-practical teaching guide, and an audit log
+stationarity, gain/loss/net/swap, alternation), change-frequency and trajectory rasters, landscape metrics (fragmentation, aggregation, diversity) and
+moving-window maps, Gi* / LISA hotspot analysis, NDVI/NDWI/NDBI, NSE/PBIAS/R2/KGE, a 30-practical teaching guide, and an audit log
 in the manual's template (date, input, tool version, parameters, output, note).
 
 ## What it does not do
@@ -36,8 +38,9 @@ On Streamlit Community Cloud set **Main file path** to `app.py`. With Docker: `d
 Only add `ANTHROPIC_API_KEY` to a public deployment's secrets if you accept that visitors spend your credit.
 
 ## Testing status
-`pytest -q` runs `test_core.py` and `test_advanced.py` (Olofsson 2014 worked-example benchmark, hand-computed intensity analysis,
-store-level accuracy / intensity / trajectory pipelines). `test_core.py` covers confusion matrix, accuracy and kappa, Pontius disagreement, figure of merit, hydrology metrics, raster area/transition
+`pytest -q` runs `test_core.py`, `test_advanced.py` and `test_pattern.py` (Olofsson 2014 worked-example benchmark, hand-computed intensity analysis,
+store-level accuracy / intensity / trajectory pipelines; hand-computed landscape metrics, brute-force Gi*). Landscape metrics were
+cross-checked against pylandstats and hotspot statistics against PySAL esda. `test_core.py` covers confusion matrix, accuracy and kappa, Pontius disagreement, figure of merit, hydrology metrics, raster area/transition
 statistics on a synthetic in-memory GeoTIFF, and the tool registry. The agent loop has not been tested against the live API.
 Treat this as research software (v0.2, experimental).
 
