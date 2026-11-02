@@ -123,11 +123,19 @@ def render(ctx, R):
     else:
         tb = st.selectbox("Training table", T, key="cl_tb")
         tcols = list(ctx.tables[tb].columns)
-        guess = lambda keys, d=0: next((tcols.index(x) for x in tcols if x.lower() in keys), min(d, len(tcols) - 1))  # noqa: E731
+        tdf = ctx.tables[tb]
+        filled = {x for x in tcols if tdf[x].replace("", np.nan).notna().any()}
+
+        def guess(keys, d=0):
+            for k in keys:  # keys in priority order; skip empty columns (e.g. a blank reference_class)
+                for x in tcols:
+                    if x.lower() == k and x in filled:
+                        return tcols.index(x)
+            return min(d, len(tcols) - 1)
         c = st.columns(4)
-        cc = c[0].selectbox("Class column", tcols, index=guess({"class", "cls", "code", "lulc", "label", "reference", "reference_class"}, 2), key="cl_cc")
-        xc = c[1].selectbox("X column", tcols, index=guess({"x", "lon", "longitude", "easting"}), key="cl_xc")
-        yc = c[2].selectbox("Y column", tcols, index=guess({"y", "lat", "latitude", "northing"}, 1), key="cl_yc")
+        cc = c[0].selectbox("Class column", tcols, index=guess(["class", "cls", "code", "lulc", "label", "reference_class", "reference", "map_class"], 2), key="cl_cc")
+        xc = c[1].selectbox("X column", tcols, index=guess(["x", "lon", "longitude", "easting"]), key="cl_xc")
+        yc = c[2].selectbox("Y column", tcols, index=guess(["y", "lat", "latitude", "northing"], 1), key="cl_yc")
         epsg = c[3].number_input("Point EPSG (0 = same as image)", 0, 99999, 4326 if xc.lower() in ("lon", "longitude") else 0, key="cl_epsg")
         c = st.columns(5)
         model = c[0].selectbox("Classifier", classify.MODELS, key="cl_model")

@@ -53,7 +53,7 @@ def render(ctx, R):
     if not maps:
         st.info("Upload LULC maps (observed, classified or simulated scenarios) in the sidebar.")
     else:
-        cat = [m for m in maps if _is_categorical(ctx.store.get(m))]
+        cat = [m for m in maps if _is_categorical(ctx.store.get(m)) and "obs_count" not in m]
         layers = st.multiselect("LULC maps (first = baseline)", maps, default=cat[: min(2, len(cat))], key="sw_layers")
         if layers:
             st.caption("Type class names to get suggested SWAT+ codes, then adjust the codes. The table is used by every section below.")

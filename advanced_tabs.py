@@ -88,7 +88,8 @@ def render_accuracy(ctx, R, T):
         if not R:
             st.info("Upload a classified raster in the sidebar.")
             return
-        a = st.selectbox("Classified raster", R, key="aaa_dr")
+        from rasterops import categorical_first
+        a = st.selectbox("Classified raster", categorical_first(ctx.store, R), key="aaa_dr")
         c = st.columns(4)
         ua = c[0].number_input("Expected user's accuracy", 0.5, 0.99, 0.85, 0.01)
         se = c[1].number_input("Target SE of overall accuracy", 0.002, 0.05, 0.01, 0.001, format="%.3f")
@@ -108,7 +109,12 @@ def render_accuracy(ctx, R, T):
             if "error" in out:
                 st.error(out["error"])
             else:
-                st.success(f"{out['points']} points saved as table `accuracy_points.csv` (order shuffled so the interpreter is blind to the map).")
+                st.session_state.aaa_gen_msg = (f"{out['points']} points saved as table `accuracy_points.csv` (order shuffled so the interpreter is "
+                                                "blind to the map). The table is now available in every tab, e.g. as training data (class column "
+                                                "`map_class`) in 🛰️ Classification.")
+                st.rerun()  # earlier tabs (Classification) must see the new table
+        if st.session_state.get("aaa_gen_msg"):
+            st.success(st.session_state.aaa_gen_msg)
         if "accuracy_points.csv" in ctx.tables:
             pts = ctx.tables["accuracy_points.csv"]
             st.download_button("⬇️ Blind sheet for interpreters (CSV)", pts.drop(columns=["map_class"]).to_csv(index=False), "accuracy_points_blind.csv", key="dl_blind")
@@ -138,7 +144,8 @@ def render_accuracy(ctx, R, T):
     if not R or not T:
         st.info("Upload a classified raster and a validation CSV (x, y, reference class) in the sidebar. No points yet? Use *Design sample & generate points*.")
         return
-    a = st.selectbox("Classified raster", R, key="aaa_r")
+    from rasterops import categorical_first
+    a = st.selectbox("Classified raster", categorical_first(ctx.store, R), key="aaa_r")
     tb = st.selectbox("Validation table", T, key="aaa_t")
     cols = list(ctx.tables[tb].columns)
     guess = lambda keys, d=0: next((cols.index(c) for c in cols if c.lower() in keys), min(d, len(cols) - 1))  # noqa: E731
@@ -172,7 +179,11 @@ def render_intensity(ctx, R):
     if len(R) < 2:
         st.info("Upload at least two LULC rasters on the same grid (e.g. 2000, 2010, 2020) in the sidebar.")
         return
-    layers = st.multiselect("LULC rasters (any order; sorted by year)", R, default=R[: min(3, len(R))], key="ia_layers")
+    from rasterops import categorical_first
+    from rasterops import is_categorical
+    cat = [n for n in categorical_first(ctx.store, R) if "#" not in n and is_categorical(ctx.store.get(n))
+           and not any(a in n.lower() for a in ("obs_count", "confidence", "count"))]
+    layers = st.multiselect("LULC rasters (any order; sorted by year)", R, default=cat[: min(3, len(cat))], key="ia_layers")
     if len(layers) < 2:
         st.info("Select two or more rasters.")
         return

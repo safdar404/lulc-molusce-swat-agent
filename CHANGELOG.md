@@ -1,4 +1,12 @@
 # Changelog
+## 1.3.1
+- Verified live on Streamlit Cloud (Islamabad, 10 × 10 km): Sentinel-2 L2A 2025 search (46 scenes), 6-scene cloud-free composite
+  (1021 × 1023 px at 10 m, 100 % coverage), Copernicus DEM (491-776 m) and ESA WorldCover 2021 on the composite's grid.
+- Fix: points generated in the Area-adjusted accuracy tab now appear immediately in earlier tabs (e.g. as training data in
+  Classification) instead of after the next click.
+- Map pickers (area-adjusted accuracy, intensity analysis, landscape metrics, SWAT+ link) now default to categorical land-cover maps
+  and skip multi-band composites and auxiliary rasters (observation counts, confidence, hotspot outputs).
+- Classification: the class-column guess skips empty columns, so generated points use `map_class` rather than the blank `reference_class`.
 ## 1.3.0
 - New **🌍 Download imagery** tab (`imagery.py`, `imagery_tab.py`) using the Microsoft Planetary Computer STAC API (no account needed).
   - **Area of interest**: a centre point plus size, a lon/lat bounding box, the extent of a loaded vector, or the exact grid of a loaded

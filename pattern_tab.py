@@ -78,7 +78,10 @@ def render(ctx, R):
     if not R:
         st.info("Upload categorical LULC rasters (projected CRS in metres) in the sidebar.")
         return
-    layers = st.multiselect("LULC rasters (one per date)", R, default=R[: min(3, len(R))], key="lm_layers")
+    from rasterops import categorical_first, is_categorical
+    cat = [n for n in categorical_first(ctx.store, R) if "#" not in n and is_categorical(ctx.store.get(n))
+           and not any(a in n.lower() for a in ("obs_count", "confidence", "count"))]
+    layers = st.multiselect("LULC rasters (one per date)", categorical_first(ctx.store, R), default=cat[: min(3, len(cat))], key="lm_layers")
     c = st.columns(4)
     nb = c[0].radio("Patch neighbour rule", [8, 4], horizontal=True, key="lm_nb")
     enn = c[3].checkbox("Nearest-neighbour distance (slower)", True, key="lm_enn")

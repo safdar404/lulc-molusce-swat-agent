@@ -17,6 +17,22 @@ def _projected_metres(r):
         raise ValueError(f"CRS units are '{c.linear_units}', not metres.")
 
 
+def is_categorical(r, max_classes=60):
+    """Integer raster with few distinct values (sampled), i.e. a class map rather than reflectance or elevation."""
+    if r.data.dtype.kind not in "iu" or getattr(r, "bands", None) is not None:
+        return False
+    sample = r.data[::7, ::7][~r.mask[::7, ::7]]
+    return 0 < np.unique(sample).size <= max_classes
+
+
+def categorical_first(store, names):
+    """Names ordered with categorical single-band maps first (stable), so pickers default to class maps."""
+    aux = ("obs_count", "confidence", "frequency", "count", "_gi_", "lisa", "trajectory")   # categorical but not land-cover maps
+    cat = [n for n in names if "#" not in n and is_categorical(store.get(n))]
+    cat = [n for n in cat if not any(a in n.lower() for a in aux)] + [n for n in cat if any(a in n.lower() for a in aux)]
+    return cat + [n for n in names if n not in cat]
+
+
 def inspect(store, name):
     r = store.get(name)
     t, v = r.transform, r.data[~r.mask]
