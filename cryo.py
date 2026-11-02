@@ -97,6 +97,24 @@ def snow_map(store, band_map, scale=1e-4, offset=0.0, ndsi_threshold=0.4, nir_th
                      "detected by NDSI. Shadowed snow in deep valleys may be missed; clouds left in the composite can be mistaken for snow.")
 
 
+def _snowline(z, is_focus, w, fine_m=100.0, min_km2=0.5):
+    """50 % crossing of the focus-class share on fine elevation bands (v1.4.6). Interpolating between the mid-points of coarse
+    custom zones put the Astore snowline at 6 622 m, because the top zone 5500-8100 m has its mid-point at 6 800 m."""
+    lo = np.floor(z.min() / fine_m) * fine_m
+    idx = ((z - lo) // fine_m).astype(np.int64)
+    area = np.bincount(idx, weights=w)
+    foc = np.bincount(idx, weights=w * is_focus, minlength=len(area))
+    ok = area >= min_km2
+    mids = lo + (np.arange(len(area)) + 0.5) * fine_m
+    share, mids = foc[ok] / area[ok], mids[ok]
+    if share.size and share[0] >= 0.5:
+        return float(mids[0]), fine_m
+    for a in range(len(share) - 1):
+        if share[a] < 0.5 <= share[a + 1]:
+            return float(mids[a] + (0.5 - share[a]) / (share[a + 1] - share[a]) * (mids[a + 1] - mids[a])), fine_m
+    return None, fine_m
+
+
 def zone_statistics(store, dem, layer, band_m=500.0, zones=None, clip=None, labels=None, focus_class=None):
     """Area of each class of a categorical layer per elevation band / zone, with shares; snowline where focus class crosses 50 %."""
     d, c = store.get(dem), store.get(layer)
@@ -123,16 +141,11 @@ def zone_statistics(store, dem, layer, band_m=500.0, zones=None, clip=None, labe
     if focus_class is not None:
         col = next((cc for cc in piv.columns if cc.split()[0] == str(int(focus_class))), None)
         if col is not None:
-            mids = (e[:-1] + e[1:]) / 2
-            share = (piv[col] / tot).to_numpy()
             zids = [i for i, _ in piv.index]
-            mid = mids[zids]
-            sl = None
-            for a in range(len(share) - 1):
-                if share[a] < 0.5 <= share[a + 1]:
-                    sl = float(mid[a] + (0.5 - share[a]) / (share[a + 1] - share[a]) * (mid[a + 1] - mid[a]))
-                    break
+            share = (piv[col] / tot).to_numpy()
+            sl, fine_m = _snowline(z, k == int(focus_class), w)
             res.update(focus_class=col, focus_share_by_zone=dict(zip(np.array(names)[zids], np.round(share * 100, 2).tolist())),
-                       snowline_50pct_m=sl, note="Snowline = elevation where the focus class first covers half of an elevation band "
-                                                 "(linear interpolation between band mid-points); None if it never reaches 50 %.")
+                       snowline_50pct_m=sl, snowline_band_m=fine_m,
+                       note=f"Snowline = lowest elevation where the focus class covers half of the area, from {fine_m:.0f} m bands whatever the "
+                            "zones shown (linear interpolation between band mid-points; bands under 0.5 km2 ignored); None if it never reaches 50 %.")
     return res

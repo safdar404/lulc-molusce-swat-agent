@@ -9,6 +9,24 @@ import jobs
 import ui
 
 
+@st.cache_resource
+def _job_registry():
+    """One registry per server process, shared by all sessions (survives page reloads and code redeploys)."""
+    return jobs.Registry()
+
+
+def _current_job():
+    """The composite job of this session, or the one named in the URL (?job=...) after a page reload."""
+    job = st.session_state.get("img_job")
+    if job is None:
+        job = _job_registry().get(st.query_params.get("job"))
+        if job is not None and (job.running or "store" in job.meta):   # skip jobs already loaded by an earlier session
+            st.session_state.img_job = job
+        else:
+            job = None
+    return job
+
+
 @st.fragment(run_every=3)
 def _poll_job():
     """Progress of the background composite; reruns the whole page once it has finished."""
@@ -17,7 +35,8 @@ def _poll_job():
         return
     if job.running:
         st.progress(job.progress, f"{job.message} · {job.elapsed / 60:.1f} min")
-        st.caption("Runs in the background on the server: reloading the page or a dropped connection no longer cancels it.")
+        st.caption("Runs in the background on the server: a dropped connection or a page reload no longer cancels it "
+                   "(the job id is kept in the page address).")
     else:
         st.rerun(scope="app")
 
@@ -125,27 +144,35 @@ def render(ctx, R):
                    "will be combined.")
         if rows:
             st.dataframe(pd.DataFrame(rows).head(30), hide_index=True)
-    job = st.session_state.get("img_job")
+    job = _current_job()
     if c[1].button("⬇️ Download composite", type="primary", disabled=bool(job and job.running)):
         job = jobs.Job("composite", I.download_composite, ctx.store, _client(), product, bbox, start.isoformat(), end.isoformat(), cloud, int(nsc),
                        res, template, out, statistic=stat, platforms=plats, clip=clip, strict_mask=strict, fill_gaps=fill)
         job.meta = {"product": product, "bbox": bbox, "template": template, "start": str(start), "end": str(end), "max_cloud": cloud,
-                    "scenes": int(nsc), "res": res}
+                    "scenes": int(nsc), "res": res, "store": ctx.store}
+        _job_registry().add(job)
         st.session_state.img_job = job
+        st.query_params["job"] = job.id
     if job is not None and job.running:
         _poll_job()
-    elif job is not None and not job.consumed:
-        job.consumed = True
+    elif job is not None and st.session_state.get("img_job_done") != job.id:
+        st.session_state.img_job_done = job.id   # register the result once per session
         st.session_state.img_err = f"Download failed after {job.elapsed / 60:.1f} min: {job.error}" if job.error else None
-        if not job.error:
-            res_ = job.result
-            ctx.store.add(res_["output"], ctx.store.outputs[res_["output"]])
-            ctx.store.add(res_["observation_count"], ctx.store.outputs[res_["observation_count"]])
-            ctx.record("download_composite", job.meta, f"{res_['output']} {res_['size']} in {job.elapsed / 60:.1f} min")
-            ctx.__dict__.setdefault("results", []).append(dict(tool="download_composite", args=dict(product=job.meta["product"]), result=res_,
+        res_ = job.result
+        src = job.meta.pop("store", None)          # the registry must not keep a whole session's rasters alive
+        names = (res_["output"], res_["observation_count"]) if res_ else ()
+        if src is not None and src is not ctx.store:   # job started by an earlier session of this page (before a reload)
+            for n in names:
+                ctx.store.outputs[n] = src.outputs[n]
+        if res_ and not job.error:
+            for n in names:
+                ctx.store.add(n, ctx.store.outputs[n])
+            meta = {k: v for k, v in job.meta.items() if k != "store"}
+            ctx.record("download_composite", meta, f"{res_['output']} {res_['size']} in {job.elapsed / 60:.1f} min")
+            ctx.__dict__.setdefault("results", []).append(dict(tool="download_composite", args=dict(product=meta["product"]), result=res_,
                                                                time=datetime.datetime.now().isoformat(timespec="seconds")))
             st.session_state.img_res = res_
-            st.rerun()
+        st.rerun()
     if st.session_state.get("img_err"):
         st.error(st.session_state.img_err)
     r = st.session_state.get("img_res")

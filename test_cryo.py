@@ -84,6 +84,11 @@ def test_snow_map_and_zone_statistics():
     z = s.call("elevation_zone_statistics", {"dem": "dem.tif", "layer": "snow.tif", "band_m": 500, "labels": r["labels"], "focus_class": 1})
     assert z["snowline_50pct_m"] == pytest.approx(4500, abs=260)
     assert z["class_totals_km2"]["1 Snow / ice"] == pytest.approx(true_snow, rel=0.01)
+    assert z["snowline_50pct_m"] == pytest.approx(4500, abs=60) and z["snowline_band_m"] == 100
+    # v1.4.6: coarse custom zones must not move the snowline (Astore: 6 622 m from the 5500-8100 m zone mid-point)
+    zz = s.call("elevation_zone_statistics", {"dem": "dem.tif", "layer": "snow.tif", "zones": [2500, 3500, 5500], "labels": r["labels"],
+                                              "focus_class": 1})
+    assert zz["snowline_50pct_m"] == pytest.approx(4500, abs=60)
     zc = s.call("elevation_zone_statistics", {"dem": "dem.tif", "layer": "wc.tif", "zones": [3000, 4500], "clip_vector": "basin"})
     assert sum(zz["zone_area_km2"] for zz in zc["zones"]) == pytest.approx(H * W * 0.01 / 2, rel=0.01)
     blocks = report.build(s, {"title": "t"})

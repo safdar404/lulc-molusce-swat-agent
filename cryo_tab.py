@@ -17,6 +17,15 @@ def _zones(txt):
         return None
 
 
+def _prefer(key, options, good):
+    """Streamlit keeps a selectbox's earlier value after new layers arrive (the composite stayed selected as 'DEM' once the DEM was
+    downloaded). Switch to the first suitable option when the remembered value is not suitable (v1.4.6)."""
+    cur = st.session_state.get(key)
+    best = next((o for o in options if good(o)), None)
+    if best is not None and (cur not in options or not good(cur)):
+        st.session_state[key] = best
+
+
 def _clip_select(ctx, key):
     vs = ctx.__dict__.get("vectors", {})
     v = st.selectbox("Clip to basin polygon", ["(none)"] + list(vs), index=1 if vs else 0, key=key)
@@ -30,6 +39,9 @@ def render(ctx, R):
         st.info("Load or download a DEM (🌍 Download imagery → Copernicus DEM) and upload the basin boundary (KMZ, shapefile, GeoPackage).")
         return
     dems = [m for m in maps if "dem" in m.lower()] + [m for m in maps if "dem" not in m.lower()]
+    is_dem = lambda n: "dem" in n.lower()  # noqa: E731
+    _prefer("cy_dem", dems, is_dem)
+    _prefer("cy_dem2", dems, is_dem)
     c = st.columns(4)
     dem = c[0].selectbox("DEM", dems, key="cy_dem")
     band = c[1].number_input("Band width (m)", 50.0, 2000.0, 500.0, 50.0, key="cy_band")
@@ -101,8 +113,16 @@ def render(ctx, R):
     ui.section("📶", "Statistics by elevation zone", "Snow cover, glaciers or land cover per elevation band, and the 50 % snowline", "green")
     c = st.columns(4)
     dem2 = c[0].selectbox("DEM", dems, key="cy_dem2")
-    from rasterops import categorical_first
-    lay = c[1].selectbox("Class map", [m for m in categorical_first(ctx.store, maps) if m != dem2], key="cy_lay")
+    from rasterops import categorical_first, is_categorical
+    lays = [m for m in categorical_first(ctx.store, maps) if m != dem2]
+
+    def _is_class(n):
+        try:
+            return ctx.store.band_count(n) == 1 and is_categorical(ctx.store.get(n)) and "dem" not in n.lower()
+        except Exception:  # noqa: BLE001
+            return False
+    _prefer("cy_lay", lays, _is_class)
+    lay = c[1].selectbox("Class map", lays, key="cy_lay")
     band2 = c[2].number_input("Band width (m)", 50.0, 2000.0, 500.0, 50.0, key="cy_band2")
     zt2 = c[3].text_input("Zone limits (m, optional)", "", placeholder="2500, 3500, 4500, 5500", key="cy_zones2")
     c = st.columns(3)

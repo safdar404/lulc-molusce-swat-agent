@@ -1,4 +1,13 @@
 # Changelog
+## 1.4.6
+- **Snowline from 100 m bands** whatever zones are displayed. With the zones 2500/3500/4500/5500 m the Astore snowline came out at
+  6 622 m, because interpolation used the mid-point (6 800 m) of the 5500-8100 m zone.
+- Snow tab pickers switch to the DEM / a class map when the remembered selection is no longer suitable (the composite stayed selected
+  as "DEM" after the DEM was downloaded).
+- Background composites now also survive a **page reload**: the job id is kept in the page address (`?job=...`) and a server-wide
+  registry lets the new session pick up the running job and load its result. Finished jobs release the original session's rasters
+  once loaded and expire after an hour (at most 20 kept).
+
 ## 1.4.5
 - **Background jobs for composites** (`jobs.py`): the download runs in its own thread kept in the session, and the page polls its
   progress every 3 s. Before, a rerun (which Streamlit triggers when the browser's websocket reconnects: a sleeping laptop, a slow link,

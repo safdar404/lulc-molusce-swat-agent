@@ -244,3 +244,21 @@ def test_background_job_survives_and_reports():
     assert j.wait(5) and not j.running and j.result == {"n": 4} and j.progress == 1.0 and j.error is None and j.elapsed >= 0
     e = jobs.Job("bad", boom)
     assert e.wait(5) and e.result is None and e.error == "ValueError: no scenes" and "boom" in e.detail
+
+
+def test_job_registry_expiry_and_cap():
+    """v1.4.6: a page reload opens a new session; the server-wide registry lets it find the job by the id kept in the URL."""
+    import jobs
+
+    reg = jobs.Registry(keep_s=3600, max_jobs=3)
+    js = [reg.add(jobs.Job(f"j{i}", lambda progress=None: 1)) for i in range(3)]
+    for j in js:
+        j.wait(5)
+    assert reg.get(js[0].id) is js[0] and reg.get(None) is None and reg.get("nope") is None
+    new = reg.add(jobs.Job("4th", lambda progress=None: 2))         # cap: the oldest finished job makes room
+    assert reg.get(new.id) is new and reg.get(js[0].id) is None and len(reg.jobs) == 3
+    short = jobs.Registry(keep_s=0)
+    old = short.add(jobs.Job("old", lambda progress=None: 1))
+    old.wait(5)
+    short.add(jobs.Job("next", lambda progress=None: 1))           # finished jobs older than keep_s expire
+    assert short.get(old.id) is None and len(short.jobs) == 1
