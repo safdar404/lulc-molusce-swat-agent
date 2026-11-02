@@ -18,6 +18,10 @@ from matplotlib.patches import FancyArrow, Patch, Rectangle  # noqa: E402
 
 # Conventional LULC colours, matched on class names (any language-neutral keyword hit wins).
 LULC_KEYWORDS = [
+    # hotspot (Gi*) and LISA classes, so statistical maps get a diverging scheme
+    (("hot 99",), "#B2182B"), (("hot 95",), "#EF8A62"), (("hot 90",), "#FDDBC7"), (("not significant",), "#F0F0F0"),
+    (("cold 90",), "#D1E5F0"), (("cold 95",), "#67A9CF"), (("cold 99",), "#2166AC"),
+    (("high-high",), "#D7191C"), (("low-low",), "#2C7BB6"), (("high-low",), "#FDAE61"), (("low-high",), "#ABD9E9"),
     (("water", "river", "lake", "reservoir", "sea"), "#2B7BB9"),
     (("built", "urban", "settlement", "impervious", "city", "road"), "#D7301F"),
     (("forest", "tree", "woodland"), "#1A7A35"),

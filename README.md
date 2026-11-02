@@ -8,6 +8,7 @@ Open-source tools for a land-use/land-cover (LULC) change, MOLUSCE simulation an
 - **Live map canvas** (`canvas_tab.py`, `live.py`, `cartography.py`): real-time processing monitor that computes LULC, change, disagreement, spectral-index, RGB-composite and continuous maps strip by strip while drawing them on a canvas, then composes an export-ready map with title, legend, scale bar, north arrow, grid coordinates and metadata box (PNG up to 600 DPI, PDF).
 - **Advanced accuracy & change analysis** (`olofsson.py`, `intensity.py`, `changeops.py`, `advanced_tabs.py`): Olofsson et al. (2014) area-adjusted accuracy with error-adjusted areas and 95% CIs, sample design and stratified random points, multi-date Intensity Analysis (Aldwaik & Pontius 2012), change-frequency and trajectory maps.
 - **Classification engine** (`classify.py`, `classify_tab.py`): Sentinel-2 / Landsat presets, 15 spectral indices, Random Forest, Extra Trees, gradient boosting, SVM, maximum likelihood and K-means, random vs spatial-block cross-validation, confidence maps.
+- **Report generator** (`report.py`, `report_tab.py`): one-click Word / print-ready HTML report with methods text, tables, maps, references and the processing log, built from the analyses run in the session.
 - **Vector tools** (`vectorops.py`, `vector_tab.py`): zipped shapefile / GeoPackage / GeoJSON / KML upload, rasterize, polygon training samples, zonal statistics and polygonize to GeoPackage.
 - **SWAT+ link** (`swatlink.py`, `swat_tab.py`): QSWAT+ landuse lookup, SCS Curve Number runoff and RUSLE erosion per LULC scenario, streamflow evaluation with Moriasi ratings and flow-duration signatures, and LULC impact between two SWAT+ runs.
 - **Drivers & scenarios** (`simulate.py`, `simulate_tab.py`): driver layers and screening (Cramér's V, AUC, VIF), logistic / Random Forest / ANN transition potentials, Markov-CA simulation with business-as-usual, ecological-protection and development scenarios, and hindcast validation (FoM, Kappa simulation) against the null model and MOLUSCE output.
@@ -42,11 +43,11 @@ On Streamlit Community Cloud set **Main file path** to `app.py`. With Docker: `d
 Only add `ANTHROPIC_API_KEY` to a public deployment's secrets if you accept that visitors spend your credit.
 
 ## Testing status
-`pytest -q` runs `test_core.py`, `test_advanced.py`, `test_pattern.py`, `test_classify.py`, `test_simulate.py`, `test_swatlink.py` and `test_vectors.py` (Olofsson 2014 worked-example benchmark, hand-computed intensity analysis,
+`pytest -q` runs `test_core.py`, `test_advanced.py`, `test_pattern.py`, `test_classify.py`, `test_simulate.py`, `test_swatlink.py`, `test_vectors.py` and `test_report.py` (Olofsson 2014 worked-example benchmark, hand-computed intensity analysis,
 store-level accuracy / intensity / trajectory pipelines; hand-computed landscape metrics, brute-force Gi*). Landscape metrics were
 cross-checked against pylandstats and hotspot statistics against PySAL esda. `test_core.py` covers confusion matrix, accuracy and kappa, Pontius disagreement, figure of merit, hydrology metrics, raster area/transition
 statistics on a synthetic in-memory GeoTIFF, and the tool registry. The agent loop has not been tested against the live API.
-Treat this as research software (v1.0): verify every number before it enters a thesis.
+Treat this as research software (v1.2): verify every number before it enters a thesis.
 
 ## Data and privacy
 Uploads stay in session memory. The agent sends tool results (not rasters) to the model provider. See [SECURITY.md](SECURITY.md).

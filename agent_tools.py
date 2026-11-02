@@ -1,6 +1,6 @@
 """Audited, read-only tools shared by the Streamlit UI and the LLM agent. Nothing touches the file system."""
 import json
-import changeops, classify, hydro, knowledge, patternops, rasterops, simulate, swatlink, vectorops
+import changeops, classify, hydro, knowledge, patternops, rasterops, report, simulate, swatlink, vectorops
 
 REG = {}
 S = lambda t, d, **k: dict(type=t, description=d, **k)
@@ -473,6 +473,19 @@ def _pz(ctx, layer, ignore_value=None, simplify=0.0, output_name=None):
     return dict(layer=name, features=int(len(g)), values=g["value"].value_counts().sort_index().to_dict())
 
 
+# ---------------- v1.2.0: report ----------------
+@tool("generate_report", "Write a thesis-style report (Word .docx and print-ready HTML) from every analysis run in this session: methods text with the computed numbers, "
+      "numbered tables, finished maps and charts, references for the methods used and the processing log. The user downloads it from the Log & report tab.",
+      {"title": STR("Report title"), "author": STR("Author"), "institution": STR("Institution"), "study_area": STR("Study area"),
+       "abstract": STR("Optional summary paragraph written for the user"), "include_log": S("boolean", "Append the processing log (default true)")})
+def _rep(ctx, title="Land-cover change, simulation and hydrological response", author="", institution="", study_area="", abstract="", include_log=True):
+    import app_version
+    blocks, docx_b, html_b = report.generate(ctx, title, author, institution, study_area, abstract, None, include_log, app_version.VERSION)
+    ctx.__dict__["report_files"] = {"report.docx": docx_b, "report.html": html_b}
+    return dict(sections=[b[1] for b in blocks if b[0] == "h1"], tables=sum(b[0] == "table" for b in blocks), figures=sum(b[0] == "fig" and bool(b[1]) for b in blocks),
+                docx_kb=round(len(docx_b) / 1024, 1), note="Download report.docx / report.html in the Log & report tab.")
+
+
 def run_tool(ctx, name, args):
     t = REG.get(name)
     if not t:
@@ -480,6 +493,10 @@ def run_tool(ctx, name, args):
     try:
         res = t["fn"](ctx, **(args or {}))
         ctx.record(name, args, json.dumps(res, default=str)[:200], (args or {}).get("note", "") if name == "record_model_settings" else "")
+        if name not in report.SKIP:  # keep full results for the report generator
+            import datetime
+            ctx.__dict__.setdefault("results", []).append(dict(tool=name, args=dict(args or {}), result=res,
+                                                               time=datetime.datetime.now().isoformat(timespec="seconds")))
         return res
     except Exception as e:
         return dict(error=f"{type(e).__name__}: {e}")

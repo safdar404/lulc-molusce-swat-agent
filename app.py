@@ -9,7 +9,7 @@ import importlib  # noqa: E402
 
 # Streamlit re-runs app.py when it changes but keeps helper modules cached. After a multi-file update that leaves
 # a stale mix (e.g. "cannot import name ... from 'agent'"), so reload every local module whose file changed.
-_LOCAL_MODULES = ["metrics", "knowledge", "store", "rasterops", "olofsson", "intensity", "changeops", "landscape", "hotspot", "patternops", "classify", "simulate", "swatlink", "vectorops", "hydro", "session", "agent_tools", "agent", "ui", "advanced_tabs", "pattern_tab", "classify_tab", "simulate_tab", "swat_tab", "vector_tab", "cartography", "live", "canvas_tab"]  # dependency order
+_LOCAL_MODULES = ["metrics", "knowledge", "store", "rasterops", "olofsson", "intensity", "changeops", "landscape", "hotspot", "patternops", "classify", "simulate", "swatlink", "vectorops", "cartography", "report", "app_version", "hydro", "session", "agent_tools", "agent", "ui", "advanced_tabs", "pattern_tab", "classify_tab", "simulate_tab", "swat_tab", "vector_tab", "report_tab", "live", "canvas_tab"]  # dependency order
 for _name in _LOCAL_MODULES:
     _mod = sys.modules.get(_name)
     if _mod is not None and getattr(_mod, "__file__", None):
@@ -28,17 +28,17 @@ st.set_page_config(page_title="LULC-MOLUSCE-SWAT+ Agent", page_icon=ui.page_icon
 ui.apply_theme()
 
 try:
-    import advanced_tabs, canvas_tab, classify_tab, hydro, knowledge, pattern_tab, simulate_tab, swat_tab, vector_tab, vectorops
+    import advanced_tabs, app_version, canvas_tab, classify_tab, hydro, knowledge, pattern_tab, report_tab, simulate_tab, swat_tab, vector_tab, vectorops
     from agent import DEFAULT_MODEL, friendly_error, offline_analysis, run_agent
     from session import Session
-    __version__ = "1.1.0"
+    __version__ = app_version.VERSION
     for _name in _LOCAL_MODULES:
         _mod = sys.modules.get(_name)
         if _mod is not None and getattr(_mod, "__file__", None):
             _mod._file_mtime = Path(_mod.__file__).stat().st_mtime
 except ImportError as e:  # most common deployment mistake: folders flattened or missing dependencies
     st.error(f"Cannot import the analysis core: {e}")
-    st.markdown("Check that all .py files from the flat package (metrics, knowledge, store, rasterops, olofsson, intensity, changeops, landscape, hotspot, patternops, classify, simulate, swatlink, vectorops, hydro, session, agent_tools, agent, advanced_tabs, pattern_tab, classify_tab, simulate_tab, swat_tab, vector_tab) are in the same folder as app.py and that "
+    st.markdown("Check that all .py files from the flat package (metrics, knowledge, store, rasterops, olofsson, intensity, changeops, landscape, hotspot, patternops, classify, simulate, swatlink, vectorops, report, hydro, session, agent_tools, agent, advanced_tabs, pattern_tab, classify_tab, simulate_tab, swat_tab, vector_tab, report_tab) are in the same folder as app.py and that "
                 "`requirements.txt` was installed. ")
     st.stop()
 
@@ -120,7 +120,7 @@ def download_outputs(where):
 
 
 tabs = st.tabs(["📚 Guide", "🛰️ Live map canvas", "🔍 Inspect & geometry", "🧭 Vector tools", "🛰️ Classification", "🗺️ Area & transitions", "📈 Intensity analysis", "🧩 Landscape & hotspots", "🔮 Drivers & scenarios", "🎯 Accuracy",
-                "📏 Area-adjusted accuracy", "⏪ Hindcast", "💧 Hydrology", "🌊 SWAT+ link", "🤖 Agent", "📝 Log"])
+                "📏 Area-adjusted accuracy", "⏪ Hindcast", "💧 Hydrology", "🌊 SWAT+ link", "🤖 Agent", "📝 Log & report"])
 
 # ---------------- Guide ----------------
 with tabs[0]:
@@ -327,5 +327,6 @@ with tabs[15]:
     st.dataframe(df, hide_index=True)
     if len(df):
         st.download_button("⬇️ Download processing log (CSV)", df.to_csv(index=False), "processing_log.csv", "text/csv")
+    report_tab.render(ctx, __version__)
 
 ui.footer()

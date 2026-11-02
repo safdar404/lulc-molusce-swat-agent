@@ -1,4 +1,16 @@
 # Changelog
+## 1.2.0
+- **Report generator** (`report.py`, `report_tab.py`, in the renamed **📝 Log & report** tab, plus an agent tool `generate_report`).
+  - Every analysis result is now kept in the session (not only the short log line), and the report is written from it: a methods and
+    results narrative containing the numbers that were actually computed, numbered tables, finished maps (title, legend with areas,
+    scale bar, north arrow, grid, metadata) and charts, a Limitations section, an alphabetical reference list limited to the methods
+    used, and the processing log as an appendix.
+  - Covers classification, area-adjusted accuracy, transitions, intensity analysis, trajectories, landscape metrics, hotspots, drivers,
+    Markov-CA simulation and hindcast validation, SWAT+ lookup, Curve Number runoff, RUSLE, streamflow evaluation, LULC flow
+    attribution and zonal statistics. Choose which analyses to include; by default the latest run of each.
+  - Downloads: editable Word (.docx) and a self-contained, print-ready HTML file (open it and print to PDF).
+  - Class names given anywhere in the session label every map. Gi* and LISA maps use diverging hot / cold colours (also in the map composer).
+- Single version source `app_version.py`. New dependency: `python-docx`.
 ## 1.1.0
 - **Vector support** (`vectorops.py`, `vector_tab.py`, new **🧭 Vector tools** tab and a sidebar uploader).
   - Reads zipped shapefiles (any folder depth), shapefile parts uploaded together, GeoPackage, GeoJSON, KML and FlatGeobuf. Invalid
