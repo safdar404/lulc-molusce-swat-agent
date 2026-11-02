@@ -1,5 +1,6 @@
 """Streamlit tab (v1.3.0, background jobs v1.4.5): download cloud-free composites, DEM and WorldCover for an area of interest."""
 import datetime
+import uuid
 
 import pandas as pd
 import streamlit as st
@@ -18,6 +19,10 @@ def _job_registry():
 def _current_job():
     """The composite job of this session, or the one named in the URL (?job=...) after a page reload."""
     job = st.session_state.get("img_job")
+    if job is not None and not hasattr(job, "id"):   # a job object created by v1.4.5 code before a redeploy
+        job.id, job.meta = uuid.uuid4().hex[:16], getattr(job, "meta", {})
+        if getattr(job, "consumed", False):
+            st.session_state.img_job_done = job.id
     if job is None:
         job = _job_registry().get(st.query_params.get("job"))
         if job is not None and (job.running or "store" in job.meta):   # skip jobs already loaded by an earlier session

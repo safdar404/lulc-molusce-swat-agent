@@ -1,4 +1,8 @@
 # Changelog
+## 1.4.7
+- Fix: sessions open during the 1.4.6 redeploy crashed with `AttributeError` because their composite job object (1.4.5) had no id.
+  Older job objects are now upgraded in place.
+
 ## 1.4.6
 - **Snowline from 100 m bands** whatever zones are displayed. With the zones 2500/3500/4500/5500 m the Astore snowline came out at
   6 622 m, because interpolation used the mid-point (6 800 m) of the 5500-8100 m zone.
